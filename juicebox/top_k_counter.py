@@ -73,6 +73,7 @@ class TopKCounter:
 if __name__ == "__main__":
     test_cases = [ 
         [
+            TopKCounter,
             ("increment", "a", None),
             ("increment", "a", None),
             ("increment", "c", None),
@@ -87,5 +88,5 @@ if __name__ == "__main__":
         ],
     ]
 
-    run_test_cases(test_cases, TopKCounter, None)
+    run_test_cases(test_cases)
 

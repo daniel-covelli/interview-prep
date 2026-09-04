@@ -69,6 +69,7 @@ class SearchEngine:
 if __name__ == "__main__":
     test_cases = [ 
         [
+            SearchEngine,
             ("add_document", ("d1", "Fresh juice daily"), None),
             ("add_document", ("d2", "Juice juice juice - the juice catalog"), None),
             ("add_document", ("d3", "A catalog of cats"), None),
@@ -78,6 +79,7 @@ if __name__ == "__main__":
             ("search", ("juice", 1), ["d2"]),
         ],
         [
+            SearchEngine,
             ("add_document", ("d1", "apple banana cherry"), None),
             ("add_document", ("d2", "apple banana"), None),
             ("add_document", ("d3", "apple cherry"), None),
@@ -85,5 +87,5 @@ if __name__ == "__main__":
         ],
     ]
 
-    run_test_cases(test_cases, SearchEngine, None)
+    run_test_cases(test_cases)
 

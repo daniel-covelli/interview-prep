@@ -79,6 +79,7 @@ class VideoAnalytics:
 if __name__ == "__main__":
     test_cases = [ 
         [
+            VideoAnalytics,
             ("record_view", ("cats", 100), None),
             ("record_view", ("dogs", 130), None),
             ("record_view", ("cats", 160), None),
@@ -88,6 +89,7 @@ if __name__ == "__main__":
             ("top_k_windowed", (2, 120, 250), [("cats", 2)]),
         ],
         [
+            VideoAnalytics,
             ("record_view", ("v", 500), None),
             ("record_view", ("v", 100), None),
             ("record_view", ("v", 300), None),
@@ -100,4 +102,4 @@ if __name__ == "__main__":
         ],
     ]
 
-    run_test_cases(test_cases, VideoAnalytics)
+    run_test_cases(test_cases)

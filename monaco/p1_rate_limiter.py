@@ -70,3 +70,19 @@ class RateLimiter:
 
     def allow(self, key: str, timestamp: float) -> bool:
         raise NotImplementedError
+
+if __name__ == "__main__":
+    from lib import run_test_cases
+
+    test_cases = [
+        [
+            (RateLimiter, (2, 10.0)),
+            ("allow", ("mbox_a", 1.0), True),
+            ("allow", ("mbox_a", 2.0), True),
+            ("allow", ("mbox_a", 3.0), False),
+            ("allow", ("mbox_a", 11.1), True),
+            ("allow", ("mbox_b", 3.0), True),
+        ],
+    ]
+
+    run_test_cases(test_cases)
