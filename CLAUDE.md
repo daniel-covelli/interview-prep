@@ -11,21 +11,25 @@ run.py                          grader entry point (auto-discovers suites)
 grader/__init__.py              shared harness — Suite, expect*, tracing, bench…
 scratch.py                      Daniel's snippet pad; never import or overwrite it
 prep_lib.py                     Daniel's personal helpers (run_test_cases, …)
-setup.sh                        creates .venv (3.13) with the repo root on its path
+pyproject.toml                  uv project; `grade = "run:cli"` entry point
 <company>/
   <problem>.py                  one problem per file (docstring spec + stubs)
   tests/test_<problem>.py       that problem's grader suite
 ```
 
+Tooling is uv: run everything as `uv run grade [key|company]` and problem
+files as `uv run <company>/<problem>.py` — uv owns `.venv`, installs the
+tooling modules editable (see pyproject.toml), and pins Python via
+`.python-version`. Never add a venv-activation or `python3.13` step to
+docs or scripts; without uv the fallbacks are `python3.13 run.py` and
+`python3.13 -m company.problem`.
+
 Company folders are plain namespace packages — no `__init__.py`, no
-registration. The venv from `setup.sh` (a `.pth` file in its
-site-packages) keeps the repo root importable for every invocation style,
-so problem files import Daniel's helpers directly:
-`from prep_lib import run_test_cases`. Add new personal helpers to
-`prep_lib.py`; they're automatically available to every current and
-future company folder. Daniel activates the venv and runs plain `python`;
-without it, `python3.13 run.py` and `python3.13 -m company.problem`
-still work.
+registration anywhere (run.py discovers by glob; never list company
+folders in pyproject.toml). Problem files import Daniel's helpers
+directly: `from prep_lib import run_test_cases`. Add new personal helpers
+to `prep_lib.py`; they're automatically available to every current and
+future company folder.
 
 Python 3.13+, standard library only. Nothing is registered anywhere:
 `run.py` globs `*/tests/test_*.py` and reads each file's `KEY`.
@@ -167,7 +171,7 @@ Inside a case: raising `NotImplementedError` → skip; `Failure`/`AssertionError
 2. Pick an unused short key prefix (letters only — it becomes a run.py
    group alias, alongside the folder name).
 3. Add problem files and test suites per the formats above.
-4. `python run.py <prefix>` — discovery is automatic; if the new
+4. `uv run grade <prefix>` — discovery is automatic; if the new
    suite doesn't appear, its `KEY` line is missing or duplicated.
 
 Keep this file authoritative: format changes belong here, in the same

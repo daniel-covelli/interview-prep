@@ -1,9 +1,9 @@
 # LeetCode-style grader: runs your current implementations against the full
 # correctness + performance suites.
 #
-#   python run.py                   # all problems
-#   python run.py m1                # just one
-#   python run.py monaco            # one company's set (folder name or key prefix)
+#   uv run grade                    # all problems
+#   uv run grade m1                 # just one
+#   uv run grade monaco             # one company's set (folder name or key prefix)
 #
 # ✓ pass    ✗ bug or scaling failure    ⚠ concern worth having an answer for
 #
@@ -67,9 +67,9 @@ def run(problems, keys):
     return 1 if failed else 0
 
 
-if __name__ == "__main__":
+def cli(argv=None):
     problems, groups = discover()
-    args = sys.argv[1:]
+    args = sys.argv[1:] if argv is None else argv
     if not args:
         keys = list(problems)
     else:
@@ -82,3 +82,7 @@ if __name__ == "__main__":
                 sys.exit(2)
             keys.extend(k for k in matched if k not in keys)
     sys.exit(run(problems, keys))
+
+
+if __name__ == "__main__":
+    cli()

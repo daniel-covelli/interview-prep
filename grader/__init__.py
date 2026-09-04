@@ -4,9 +4,9 @@
 # brute-force oracles and enumerate the edge cases. Reading them spoils the
 # exercise — just run:
 #
-#   python run.py                   # everything
-#   python run.py m1                # one problem
-#   python run.py monaco            # one company's set
+#   uv run grade                    # everything
+#   uv run grade m1                 # one problem
+#   uv run grade monaco             # one company's set
 #
 import importlib
 import sys

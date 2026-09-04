@@ -13,30 +13,26 @@ run.py          the grader entry point
 scratch.py      free-for-all snippet pad; nothing imports it
 prep_lib.py     my own helpers (run_test_cases, …), importable from any
                 problem file: `from prep_lib import run_test_cases`
-setup.sh        one-time venv setup (see below)
+pyproject.toml  uv project config — defines the `grade` command
 ```
 
-Python 3.13+, standard library only.
-
-## Setup (once)
-
-```
-./setup.sh                      # creates .venv with the repo root importable
-source .venv/bin/activate       # then plain `python` just works, from any cwd
-```
-
-Without the venv everything still runs, you just spell it out:
-`python3.13 run.py`, and `python3.13 -m juicebox.top_k_counter` for a
-problem file (the `-m` form is needed because a bare script run doesn't
-put the repo root on the import path).
+Python 3.13+, standard library only. Tooling: [uv](https://docs.astral.sh/uv/)
+— no setup step, no venv activation; `uv run` manages `.venv` and the
+interpreter version transparently.
 
 ## Running the grader
 
 ```
-python run.py                   # everything
-python run.py m2                # one problem by key
-python run.py monaco            # one company's set (folder name, or prefix: m / jb)
+uv run grade                    # everything
+uv run grade m2                 # one problem by key
+uv run grade monaco             # one company's set (folder name, or prefix: m / jb)
+uv run juicebox/video_views.py  # a problem file's own __main__ checks
+uv run scratch.py               # the snippet pad
 ```
+
+No uv? `python3.13 run.py [key]` still works, and problem files run via
+`python3.13 -m juicebox.top_k_counter` (the `-m` form is needed because a
+bare script run doesn't put the repo root on the import path).
 
 Suites are auto-discovered from `<company>/tests/test_*.py` — nothing is
 registered anywhere.
@@ -63,7 +59,7 @@ Randomized tests use fixed seeds, so failures reproduce exactly.
    then check them against the "assumptions decided here" section — that
    section stands in for the interviewer's answers.
 3. Restate the problem in 2 sentences, name your data structure, THEN code.
-4. Get the base spec passing (`python run.py <key>`) before touching
+4. Get the base spec passing (`uv run grade <key>`) before touching
    extensions. Narrate trade-offs while you type.
 5. Do extensions in order until time runs out. "Discuss only" items: talk
    through them out loud for 2–3 minutes, no code. The `⚠` concerns in the
