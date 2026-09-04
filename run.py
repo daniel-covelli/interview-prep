@@ -1,9 +1,9 @@
 # LeetCode-style grader: runs your current implementations against the full
 # correctness + performance suites.
 #
-#   python3.13 run.py               # all problems
-#   python3.13 run.py m1            # just one
-#   python3.13 run.py monaco        # one company's set (folder name or key prefix)
+#   python run.py                   # all problems
+#   python run.py m1                # just one
+#   python run.py monaco            # one company's set (folder name or key prefix)
 #
 # ✓ pass    ✗ bug or scaling failure    ⚠ concern worth having an answer for
 #

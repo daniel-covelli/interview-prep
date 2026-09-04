@@ -11,18 +11,31 @@ monaco/         4 problems (scaffolds) — rate limiter, KV store w/ TTL+txns,
 grader/         shared test harness (nothing interview-relevant inside)
 run.py          the grader entry point
 scratch.py      free-for-all snippet pad; nothing imports it
-prep_lib.py     my own helpers (run_test_cases, …) — problem files get them
-                via `from lib import ...` in any company folder
+prep_lib.py     my own helpers (run_test_cases, …), importable from any
+                problem file: `from prep_lib import run_test_cases`
+setup.sh        one-time venv setup (see below)
 ```
 
-Python 3.13+ (`python3.13`), standard library only.
+Python 3.13+, standard library only.
+
+## Setup (once)
+
+```
+./setup.sh                      # creates .venv with the repo root importable
+source .venv/bin/activate       # then plain `python` just works, from any cwd
+```
+
+Without the venv everything still runs, you just spell it out:
+`python3.13 run.py`, and `python3.13 -m juicebox.top_k_counter` for a
+problem file (the `-m` form is needed because a bare script run doesn't
+put the repo root on the import path).
 
 ## Running the grader
 
 ```
-python3.13 run.py               # everything
-python3.13 run.py m2            # one problem by key
-python3.13 run.py monaco        # one company's set (folder name, or prefix: m / jb)
+python run.py                   # everything
+python run.py m2                # one problem by key
+python run.py monaco            # one company's set (folder name, or prefix: m / jb)
 ```
 
 Suites are auto-discovered from `<company>/tests/test_*.py` — nothing is
@@ -50,7 +63,7 @@ Randomized tests use fixed seeds, so failures reproduce exactly.
    then check them against the "assumptions decided here" section — that
    section stands in for the interviewer's answers.
 3. Restate the problem in 2 sentences, name your data structure, THEN code.
-4. Get the base spec passing (`python3.13 run.py <key>`) before touching
+4. Get the base spec passing (`python run.py <key>`) before touching
    extensions. Narrate trade-offs while you type.
 5. Do extensions in order until time runs out. "Discuss only" items: talk
    through them out loud for 2–3 minutes, no code. The `⚠` concerns in the

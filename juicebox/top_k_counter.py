@@ -21,7 +21,7 @@
 #   c.top_k(2)      -> [("a", 3), ("b", 2)]
 #   c.top_k(10)     -> [("a", 3), ("b", 2), ("c", 1)]
 #   c.top_k(0)      -> []
-from lib import run_test_cases
+from prep_lib import run_test_cases
 from collections import Counter 
 
 class TopKCounter:

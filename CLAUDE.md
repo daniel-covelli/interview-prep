@@ -11,19 +11,21 @@ run.py                          grader entry point (auto-discovers suites)
 grader/__init__.py              shared harness — Suite, expect*, tracing, bench…
 scratch.py                      Daniel's snippet pad; never import or overwrite it
 prep_lib.py                     Daniel's personal helpers (run_test_cases, …)
+setup.sh                        creates .venv (3.13) with the repo root on its path
 <company>/
-  __init__.py                   path shim — copy verbatim from juicebox/__init__.py
-  lib.py                        pointer to ../prep_lib.py — copy verbatim too
   <problem>.py                  one problem per file (docstring spec + stubs)
   tests/test_<problem>.py       that problem's grader suite
 ```
 
-`prep_lib.py` holds Daniel's own generic helpers; every company folder's
-`lib.py` re-exports it, so problem files can write
-`from lib import run_test_cases` and use the helpers in their `__main__`
-self-check blocks — it works both under the grader and when a problem file
-is run directly. Add new personal helpers to `prep_lib.py` only; never put
-real code in a folder's `lib.py`.
+Company folders are plain namespace packages — no `__init__.py`, no
+registration. The venv from `setup.sh` (a `.pth` file in its
+site-packages) keeps the repo root importable for every invocation style,
+so problem files import Daniel's helpers directly:
+`from prep_lib import run_test_cases`. Add new personal helpers to
+`prep_lib.py`; they're automatically available to every current and
+future company folder. Daniel activates the venv and runs plain `python`;
+without it, `python3.13 run.py` and `python3.13 -m company.problem`
+still work.
 
 Python 3.13+, standard library only. Nothing is registered anywhere:
 `run.py` globs `*/tests/test_*.py` and reads each file's `KEY`.
@@ -161,12 +163,11 @@ Inside a case: raising `NotImplementedError` → skip; `Failure`/`AssertionError
 
 ## Adding a company set
 
-1. `mkdir <company> <company>/tests` and copy `juicebox/__init__.py` and
-   `juicebox/lib.py` in verbatim.
+1. `mkdir <company> <company>/tests` — that's the whole setup.
 2. Pick an unused short key prefix (letters only — it becomes a run.py
    group alias, alongside the folder name).
 3. Add problem files and test suites per the formats above.
-4. `python3.13 run.py <prefix>` — discovery is automatic; if the new
+4. `python run.py <prefix>` — discovery is automatic; if the new
    suite doesn't appear, its `KEY` line is missing or duplicated.
 
 Keep this file authoritative: format changes belong here, in the same

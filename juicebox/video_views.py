@@ -26,7 +26,7 @@
 #   va.top_k_windowed(5, 30, 300)   -> []
 import bisect
 from collections import Counter
-from lib import run_test_cases
+from prep_lib import run_test_cases
 
 class VideoAnalytics:
     def __init__(self):
