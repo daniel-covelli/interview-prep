@@ -8,11 +8,10 @@ performance suites against whatever is currently in the problem files.
 juicebox/       3 problems (solved) — top-k counter, video views, text search
 monaco/         4 problems (scaffolds) — rate limiter, KV store w/ TTL+txns,
                 contact dedup, meeting scheduler
-grader/         shared test harness (nothing interview-relevant inside)
-run.py          the grader entry point
+grader/         shared test harness + the `grade` CLI (nothing interview-relevant inside)
 scratch.py      free-for-all snippet pad; nothing imports it
-prep_lib.py     my own helpers (run_test_cases, …), importable from any
-                problem file: `from prep_lib import run_test_cases`
+lib.py          my own helpers (run_test_cases, …), importable from any
+                problem file: `from lib import run_test_cases`
 pyproject.toml  uv project config — defines the `grade` command
 ```
 
@@ -30,7 +29,7 @@ uv run juicebox/video_views.py  # a problem file's own __main__ checks
 uv run scratch.py               # the snippet pad
 ```
 
-No uv? `python3.13 run.py [key]` still works, and problem files run via
+No uv? `python3.13 -m grader [key]` still works, and problem files run via
 `python3.13 -m juicebox.top_k_counter` (the `-m` form is needed because a
 bare script run doesn't put the repo root on the import path).
 

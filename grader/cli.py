@@ -15,7 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
@@ -67,7 +67,7 @@ def run(problems, keys):
     return 1 if failed else 0
 
 
-def cli(argv=None):
+def main(argv=None):
     problems, groups = discover()
     args = sys.argv[1:] if argv is None else argv
     if not args:
@@ -85,4 +85,4 @@ def cli(argv=None):
 
 
 if __name__ == "__main__":
-    cli()
+    main()

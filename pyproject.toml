@@ -6,15 +6,15 @@ requires-python = ">=3.13"
 
 # The pnpm-script equivalent: `uv run grade [key|company]`
 [project.scripts]
-grade = "run:cli"
+grade = "grader.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 # Only the tooling is "installed" (editable, by uv, into its managed .venv).
-# Company folders are never listed here — run.py discovers them by glob and
-# puts the repo root on sys.path itself.
+# Company folders are never listed here — the grader discovers them by glob
+# and puts the repo root on sys.path itself.
 [tool.setuptools]
-py-modules = ["run", "prep_lib"]
+py-modules = ["lib"]
 packages = ["grader"]

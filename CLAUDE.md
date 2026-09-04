@@ -7,11 +7,11 @@ problems or company sets, follow this file exactly — it is the spec.
 ## Layout
 
 ```
-run.py                          grader entry point (auto-discovers suites)
 grader/__init__.py              shared harness — Suite, expect*, tracing, bench…
+grader/cli.py                   the `grade` CLI (auto-discovers suites); __main__.py wraps it
 scratch.py                      Daniel's snippet pad; never import or overwrite it
-prep_lib.py                     Daniel's personal helpers (run_test_cases, …)
-pyproject.toml                  uv project; `grade = "run:cli"` entry point
+lib.py                          Daniel's personal helpers (run_test_cases, …)
+pyproject.toml                  uv project; `grade = "grader.cli:main"` entry point
 <company>/
   <problem>.py                  one problem per file (docstring spec + stubs)
   tests/test_<problem>.py       that problem's grader suite
@@ -21,18 +21,18 @@ Tooling is uv: run everything as `uv run grade [key|company]` and problem
 files as `uv run <company>/<problem>.py` — uv owns `.venv`, installs the
 tooling modules editable (see pyproject.toml), and pins Python via
 `.python-version`. Never add a venv-activation or `python3.13` step to
-docs or scripts; without uv the fallbacks are `python3.13 run.py` and
+docs or scripts; without uv the fallbacks are `python3.13 -m grader` and
 `python3.13 -m company.problem`.
 
 Company folders are plain namespace packages — no `__init__.py`, no
-registration anywhere (run.py discovers by glob; never list company
+registration anywhere (grader/cli.py discovers by glob; never list company
 folders in pyproject.toml). Problem files import Daniel's helpers
-directly: `from prep_lib import run_test_cases`. Add new personal helpers
-to `prep_lib.py`; they're automatically available to every current and
-future company folder.
+directly: `from lib import run_test_cases`. Add new personal helpers to
+`lib.py`; they're automatically available to every current and future
+company folder.
 
 Python 3.13+, standard library only. Nothing is registered anywhere:
-`run.py` globs `*/tests/test_*.py` and reads each file's `KEY`.
+the CLI globs `*/tests/test_*.py` and reads each file's `KEY`.
 
 ## Problem files
 
@@ -102,7 +102,7 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
    KEY = "m5"          # <prefix><number>; prefix = short company tag (jb, m, …)
    SEED = 0x...        # fixed seed; never random.seed() elsewhere
    ```
-   `KEY` is how run.py finds the suite; keys must be unique repo-wide.
+   `KEY` is how the CLI finds the suite; keys must be unique repo-wide.
 3. **Structure of `main()`** (must return `suite.summary()`; end the file
    with `if __name__ == "__main__": sys.exit(1 if main().failed else 0)`):
    - Load via `load_class("company.module", "ClassName")` /
@@ -168,7 +168,7 @@ Inside a case: raising `NotImplementedError` → skip; `Failure`/`AssertionError
 ## Adding a company set
 
 1. `mkdir <company> <company>/tests` — that's the whole setup.
-2. Pick an unused short key prefix (letters only — it becomes a run.py
+2. Pick an unused short key prefix (letters only — it becomes a CLI
    group alias, alongside the folder name).
 3. Add problem files and test suites per the formats above.
 4. `uv run grade <prefix>` — discovery is automatic; if the new

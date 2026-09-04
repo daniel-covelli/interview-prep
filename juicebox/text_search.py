@@ -23,7 +23,7 @@
 #   se.search("juice fresh")  -> ["d1"]
 #   se.search("cat")          -> []     # "catalog"/"cats" are not "cat"
 #   se.search("juice", k=1)   -> ["d2"]
-from prep_lib import run_test_cases
+from lib import run_test_cases
 from collections import Counter
 import re
 import heapq

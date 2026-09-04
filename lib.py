@@ -1,7 +1,7 @@
 # Daniel's personal helpers, shared across every company folder — the
-# grown-up sibling of scratch.py. Problem files reach this via
-# `from lib import ...` (each company folder's lib.py pointer resolves here),
-# so helpers added below are available to all current and future prep sets.
+# grown-up sibling of scratch.py. Problem files just write
+# `from lib import ...` (uv installs this module into the venv), so helpers
+# added below are available to all current and future prep sets.
 
 
 def run_test_cases(test_cases: list[tuple], class_to_make, run_specific: int | None = None):
