@@ -1,0 +1,9 @@
+{
+  // VS Code prompts to install these when the folder is opened.
+  // ms-python.python bundles the debugger (ms-python.debugpy) that
+  // launch.json's "debugpy" configurations require.
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.debugpy"
+  ]
+}
