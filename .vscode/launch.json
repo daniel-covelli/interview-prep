@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "grade: all problems",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "grader",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "grade: pick a problem",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "grader",
+      "args": ["${input:problemKey}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "problemKey",
+      "type": "promptString",
+      "description": "Problem key or company (e.g. m1, jb2, monaco)",
+      "default": "m1"
+    }
+  ]
+}
