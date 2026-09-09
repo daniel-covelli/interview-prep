@@ -150,6 +150,20 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
 5. **Determinism**: no wall-clock, no unseeded randomness, no
    order-dependent expectations unless the spec pins the order (give
    randomized records unique tie-break fields so oracle output is unique).
+6. **Failures must be diagnosable without opening the test file**: the
+   suites are spoiler-walled, so the printed failure is the ONLY debugging
+   information Daniel gets. A failure must therefore show the complete
+   experiment: how the object was constructed (every ctor arg, including
+   extension kwargs like overrides), the full prior call sequence with
+   actual return values, and the failing call with Output vs Expected.
+   `tracing(...)` records all of this automatically — never build a
+   correctness-case object untraced, and never feed a traced object state
+   through a side channel it won't record. Where the call sequence alone
+   doesn't pin down the rule being tested, add a `note=` naming it (the
+   window bounds in play, which key had the override, the seed/op index
+   of a randomized case). Litmus test: could Daniel fix the bug from the
+   failure text alone? If not, the suite — or the grader's replay — is
+   what's broken, not his solution-reading discipline.
 
 ## Grader API (grader/__init__.py)
 
@@ -159,7 +173,9 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
   `expect_set`, `expect_len`, `check_topk(result, true_counts, k)`
 - `Failure(output=…, expected=…, note=…)` for custom checks;
   `desc("text")` renders un-repr'd in i/o lines
-- `tracing(cls)` — call-recording factory for Input replay
+- `tracing(cls)` — call-recording factory for Input replay: captures the
+  constructor args and every method call *and its return value*, so a
+  failure replays as `Cls(args): call(...) -> result; … → failing_call`
 - `load_class(dotted_module, name)` / `load_fn(...)` → `(obj, None)` or `(None, reason)`
 - `bench(fn, repeat=3)` best-of-N seconds; `fmt_s(seconds)`; `short(obj, limit)`
 - `raise PerfConcern("…")` inside a case → `⚠` instead of `✗`
