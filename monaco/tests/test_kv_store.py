@@ -291,32 +291,6 @@ def main():
                     oracle.rollback()
     suite.case("randomized: 4k mixed ops cross-checked against oracle", randomized)
 
-    suite.section("EXTENSIONS (skipped until you build them)")
-
-    def ext_keys_prefix():
-        if not hasattr(cls, "keys"):
-            raise NotImplementedError
-        st = make()
-        st.set("user:1", "a")
-        st.set("user:2", "b", ttl_seconds=5, now=0.0)
-        st.set("post:1", "c")
-        expect(st.keys("user:", now=0.0), ["user:1", "user:2"],
-               note="alive keys with the prefix, sorted")
-        expect(st.keys("", now=0.0), ["post:1", "user:1", "user:2"],
-               note="empty prefix matches everything")
-        expect(st.keys("zzz", now=0.0), [])
-        st.begin()
-        st.set("user:3", "d")
-        st.delete("user:1")
-        expect(st.keys("user:", now=0.0), ["user:2", "user:3"],
-               note="keys() must respect open-transaction writes and deletes")
-        # `now` must never rewind within one store: an extension-2 sweep is
-        # allowed to purge what it sees expire, so this check comes last
-        expect(st.keys("user:", now=10.0), ["user:3"],
-               note="expired keys must not be listed (user:2's TTL is up; "
-                    "user:1 is still masked by the transactional delete)")
-    suite.case("extension 1: keys(prefix)", ext_keys_prefix)
-
     if suite.failed or not suite.passed:
         suite.section("PERFORMANCE")
         reason = ("fix correctness failures first" if suite.failed

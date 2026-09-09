@@ -153,7 +153,7 @@ def main():
     suite.case("randomized: 5k calls over 8 keys cross-checked against oracle",
                randomized)
 
-    suite.section("EXTENSIONS (skipped until you build them)")
+    suite.section("FOLLOW-UP PHASES (skipped until you build them)")
 
     def ext_remaining():
         if not hasattr(cls, "remaining"):

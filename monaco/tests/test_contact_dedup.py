@@ -280,22 +280,6 @@ def main():
                          f"by hand if this is hard to see")
     suite.case("randomized: 400 messy records cross-checked against oracle", randomized)
 
-    suite.section("EXTENSIONS (skipped until you build them)")
-
-    def ext_aliases():
-        a = rec("a", email="keep@x.com", phone="111-222-3333",
-                source="manual", updated_at=9)
-        b = rec("b", email="lose@x.com", phone="(111) 222-3333",
-                source="enrichment", updated_at=1)
-        got = dedupe([a, b])
-        if not (got and isinstance(got[0], dict) and "all_emails" in got[0]):
-            raise NotImplementedError
-        expect(got[0]["all_emails"], ["keep@x.com", "lose@x.com"],
-               note="all merged emails, normalized, deduped, sorted")
-        expect(got[0]["all_phones"], ["1112223333"],
-               note="the two phone spellings normalize to ONE entry")
-    suite.case("extension 1: all_emails / all_phones keep the losers", ext_aliases)
-
     if suite.failed or not suite.passed:
         suite.section("PERFORMANCE")
         reason = ("fix correctness failures first" if suite.failed

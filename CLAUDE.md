@@ -56,18 +56,23 @@ CONTEXT
 
 SPEC
 ----
-Exact signatures and behavior. Phased specs (SPEC — PHASE 1/2/3) for
-"keep extending it" problems. Time is always passed in explicitly —
-never time.time().
+Exact signatures and behavior. Phases (SPEC — PHASE 1/2/3) ONLY for
+"keep extending it" problems — most problems are unphased and use a
+single SPEC. When phased, each phase section ends with its own
+`Examples:` block and there is no top-level EXAMPLES section. Everything
+Daniel is meant to CODE lives here — a codeable follow-up is a later
+phase, never a bullet in some other section. Time is always passed in
+explicitly — never time.time().
 
 EXAMPLES
 --------
-Copy-pasteable calls with -> expected values, including one tricky case.
-Sufficient examples for EVERY separately implementable step — each phase
-of a phased spec, each stubbed helper function, and each codeable
-extension gets its own example block (EXAMPLES — PHASE 2, EXAMPLES —
-EXTENSION 1 (name), …). Daniel writes his own verification from these
-examples alone, so a step without examples is unverifiable.
+(Unphased problems only.) Copy-pasteable calls with -> expected values,
+including one tricky case. Examples always live NEXT TO the description
+they illustrate: phase examples inside their SPEC — PHASE section,
+helper-function examples with the rules they demonstrate. Daniel writes
+his own verification from these examples alone, so every separately
+implementable step (phase, stubbed helper) needs enough examples to
+check against — a step without examples is unverifiable.
 
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
@@ -75,10 +80,14 @@ The answers an interviewer would give to good clarifying questions:
 boundary conventions (half-open windows, tie-breaks), input guarantees,
 what's out of scope.
 
-EXTENSIONS
-----------
-Numbered, in the order to attempt them; hardest ones marked
-"Discuss only". These are the live-interview follow-ups.
+DISCUSS AFTERWARDS
+------------------
+OPTIONAL — include only when the problem naturally raises follow-ups
+worth discussing or researching after the timebox (scaling,
+distribution, storage layout, spec negotiation). Bullet questions only:
+no signatures, no examples, no code, never a test case. Anything worth
+actually CODING is a later SPEC phase instead. Omit the section when a
+problem has no worthwhile follow-ups.
 
 TARGET COMPLEXITY
 -----------------
@@ -127,13 +136,13 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
      (empty, k=0, whole-range), and last a **randomized cross-check
      against a brute-force oracle** defined in the test file, with the
      seed/op index in the failure note so it reproduces.
-   - **EXTENSIONS section** titled "EXTENSIONS (skipped until you build
-     them)": one case per codeable extension, gated so an unbuilt
-     extension SKIPS instead of failing (`if not hasattr(...): raise
+   - **Later-phase cases**: a case for a later SPEC phase must SKIP, not
+     fail, until Daniel builds that phase (`if not hasattr(...): raise
      NotImplementedError`, or catch the TypeError from an unsupported
-     constructor kwarg and re-raise NotImplementedError). Base-spec cases
-     must also tolerate extension output (e.g. project away extra dict
-     keys an extension adds).
+     constructor kwarg and re-raise NotImplementedError). Earlier-phase
+     cases must tolerate later-phase output (e.g. project away extra dict
+     keys a later phase adds). DISCUSS AFTERWARDS items get NO test
+     cases — they are talking points, not gradeable code.
    - **PERFORMANCE section**, gated:
      ```python
      if suite.failed or not suite.passed:
@@ -150,7 +159,7 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
      claims. `suite.info(...)` the measured timings; make the assert
      message name the naive implementation being caught and the target
      complexity. Finish with one `PerfConcern` (`⚠`) case rehearsing the
-     discuss-only extensions / memory story.
+     DISCUSS AFTERWARDS items / memory story.
 4. **Verification bar (do not skip)**: before committing a new suite,
    write BOTH a reference solution and the naive-trap solution in the
    scratchpad, overlay them onto the problem file, and confirm: reference
@@ -163,7 +172,7 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
    suites are spoiler-walled, so the printed failure is the ONLY debugging
    information Daniel gets. A failure must therefore show the complete
    experiment: how the object was constructed (every ctor arg, including
-   extension kwargs like overrides), the full prior call sequence with
+   later-phase kwargs like overrides), the full prior call sequence with
    actual return values, and the failing call with Output vs Expected.
    `tracing(...)` records all of this automatically — never build a
    correctness-case object untraced, and never feed a traced object state

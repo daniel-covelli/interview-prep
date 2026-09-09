@@ -35,35 +35,13 @@ EXAMPLES
     limiter.allow("mbox_a", 11.1)  -> True    # request at 1.0 has aged out
     limiter.allow("mbox_b", 3.0)   -> True    # independent key
 
-EXAMPLES — EXTENSION 1 (remaining)
-----------------------------------
-    limiter = RateLimiter(max_requests=2, window_seconds=10.0)
-    limiter.allow("mbox_a", 1.0)      -> True
-    limiter.remaining("mbox_a", 1.0)  -> 1
-    limiter.allow("mbox_a", 2.0)      -> True
-    limiter.remaining("mbox_a", 2.0)  -> 0
-    limiter.remaining("mbox_a", 11.5) -> 2    # both requests aged out
-    limiter.remaining("never_seen", 0.0) -> 2
-
-EXAMPLES — EXTENSION 3 (overrides)
-----------------------------------
-    limiter = RateLimiter(max_requests=2, window_seconds=10.0,
-                          overrides={"vip_mbox": 3})
-    limiter.allow("vip_mbox", 1.0) -> True
-    limiter.allow("vip_mbox", 1.1) -> True
-    limiter.allow("vip_mbox", 1.2) -> True    # third allowed by override
-    limiter.allow("vip_mbox", 1.3) -> False
-    limiter.allow("other", 2.0)    -> True
-    limiter.allow("other", 2.1)    -> True
-    limiter.allow("other", 2.2)    -> False   # default cap of 2 still applies
-
 ASSUMPTIONS YOU'D NORMALLY HAVE TO ASK ABOUT (decided here)
 -----------------------------------------------------------
 - Denied requests are not recorded (no penalty).
 - Window is half-open: a request exactly `window_seconds` old no longer counts.
 - Single process, single thread. Memory should stay O(active requests),
   so evict aged-out timestamps as you go.
-- Extension 2 only: assume timestamps are globally non-decreasing across
+- Follow-up phase 2 only: assume timestamps are globally non-decreasing across
   keys (one real clock). The base spec guarantees ordering per key only —
   the EXAMPLES block even goes backwards globally — but cross-key idle
   cleanup needs a shared notion of "now" to be well-defined.
@@ -71,10 +49,18 @@ ASSUMPTIONS YOU'D NORMALLY HAVE TO ASK ABOUT (decided here)
 PRACTICE NOTE: in the real interview, items in this section arrive as
 YOUR clarifying questions. Rehearse asking them out loud before coding.
 
-EXTENSIONS (attempt in order after the base version passes your own
-manual checks; each is a typical live follow-up)
+SPEC — FOLLOW-UP PHASES (attempted in order after the base version
+passed manual checks; each was a typical live follow-up)
 ----------------------------------------------------------------
 1. `remaining(key, timestamp) -> int` — how many sends are left right now.
+   Examples:
+       limiter = RateLimiter(max_requests=2, window_seconds=10.0)
+       limiter.allow("mbox_a", 1.0)      -> True
+       limiter.remaining("mbox_a", 1.0)  -> 1
+       limiter.allow("mbox_a", 2.0)      -> True
+       limiter.remaining("mbox_a", 2.0)  -> 0
+       limiter.remaining("mbox_a", 11.5) -> 2    # both requests aged out
+       limiter.remaining("never_seen", 0.0) -> 2
 2. Idle-key cleanup: after the base version, `allow` must also fully
    forget keys with no requests in the current window. What's the
    worst-case memory now?
@@ -82,9 +68,20 @@ manual checks; each is a typical live follow-up)
    each value is that key's max_requests, replacing the default cap for
    that key only. window_seconds is never overridden; keys not listed
    keep the constructor's max_requests.
-4. Discuss only (write a short comment block, no code): what changes if
-   this must work across 10 API servers? Where does the state live, and
-   what race appears?
+   Examples:
+       limiter = RateLimiter(max_requests=2, window_seconds=10.0,
+                             overrides={"vip_mbox": 3})
+       limiter.allow("vip_mbox", 1.0) -> True
+       limiter.allow("vip_mbox", 1.1) -> True
+       limiter.allow("vip_mbox", 1.2) -> True    # third allowed by override
+       limiter.allow("vip_mbox", 1.3) -> False
+       limiter.allow("other", 2.0)    -> True
+       limiter.allow("other", 2.1)    -> True
+       limiter.allow("other", 2.2)    -> False   # default cap of 2 still applies
+DISCUSS AFTERWARDS
+------------------
+- What changes if this must work across 10 API servers? Where does the
+  state live, and what race appears?
 
 TARGET COMPLEXITY
 -----------------

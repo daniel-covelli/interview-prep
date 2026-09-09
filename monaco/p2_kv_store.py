@@ -16,6 +16,15 @@ SPEC — PHASE 1 (basic store)
     store.get(key: str) -> str | None      # None if absent
     store.delete(key: str) -> bool         # True if key existed
 
+Examples:
+    store = KVStore()
+    store.set("a", "1")
+    store.get("a")            -> "1"
+    store.get("missing")      -> None
+    store.delete("a")         -> True
+    store.get("a")            -> None
+    store.delete("a")         -> False
+
 SPEC — PHASE 2 (TTL)
 --------------------
     store.set(key, value, ttl_seconds: float | None = None, *, now: float = 0.0)
@@ -29,6 +38,14 @@ SPEC — PHASE 2 (TTL)
   now >= t0 + T.
 - Re-setting a key replaces its TTL entirely (ttl_seconds=None → no expiry).
 - Expiry may be lazy (checked on access); no background threads.
+
+Examples:
+    store = KVStore()
+    store.set("s", "x", ttl_seconds=10, now=0.0)
+    store.get("s", now=9.9)   -> "x"
+    store.get("s", now=10.0)  -> None      # expired exactly at t0 + T
+    store.set("s", "y", now=11.0)          # re-set: ttl_seconds=None → no expiry
+    store.get("s", now=1e9)   -> "y"
 
 SPEC — PHASE 3 (transactions)
 -----------------------------
@@ -45,27 +62,7 @@ SPEC — PHASE 3 (transactions)
   unexpired) just before the call — so a second delete of the same key
   inside a transaction returns False.
 
-EXAMPLES — PHASE 1
-------------------
-    store = KVStore()
-    store.set("a", "1")
-    store.get("a")            -> "1"
-    store.get("missing")      -> None
-    store.delete("a")         -> True
-    store.get("a")            -> None
-    store.delete("a")         -> False
-
-EXAMPLES — PHASE 2
-------------------
-    store = KVStore()
-    store.set("s", "x", ttl_seconds=10, now=0.0)
-    store.get("s", now=9.9)   -> "x"
-    store.get("s", now=10.0)  -> None      # expired exactly at t0 + T
-    store.set("s", "y", now=11.0)          # re-set: ttl_seconds=None → no expiry
-    store.get("s", now=1e9)   -> "y"
-
-EXAMPLES — PHASE 3
-------------------
+Examples:
     store = KVStore()
     store.set("a", "1")
     store.begin()
@@ -81,18 +78,6 @@ EXAMPLES — PHASE 3
     store.get("a")            -> "2"
     store.commit()            -> raises TransactionError (no open txn)
 
-EXAMPLES — EXTENSION 1 (keys)
------------------------------
-    store = KVStore()
-    store.set("apple", "1")
-    store.set("app", "2", ttl_seconds=5, now=0.0)
-    store.set("banana", "3")
-    store.begin()
-    store.set("apricot", "4")
-    store.delete("banana")    -> True
-    store.keys("ap", now=6.0) -> ["apple", "apricot"]   # "app" expired at 5.0
-    store.keys("", now=6.0)   -> ["apple", "apricot"]   # "banana" masked by txn delete
-
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
 - Values are plain strings; keys are case-sensitive.
@@ -103,17 +88,15 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
   expired transactional entry falls through to outer layers, which may
   still hold a live value.
 
-EXTENSIONS
-----------
-1. `keys(prefix: str, *, now: float = 0.0) -> list[str]` — alive keys
-   starting with `prefix` ("" matches everything), lexicographically
-   sorted, and seen through any open transactions: uncommitted writes
-   are listed, transactionally-deleted keys are not. What's the cost,
-   and how would a trie change it?
-2. Make expired keys actually free memory eventually without a thread
-   (hint: opportunistic sweep budget per call).
-3. Discuss only: how would you support `get` at a past timestamp
-   ("time travel read")? What does that do to your storage layout?
+DISCUSS AFTERWARDS
+------------------
+- Prefix scans: how would you support a `keys(prefix)` that respects
+  TTLs and open transactions? What's the cost, and how would a trie
+  change it?
+- How do expired keys actually free memory without a background thread
+  (hint: opportunistic sweep budget per call)?
+- How would you support `get` at a past timestamp ("time travel read")?
+  What does that do to your storage layout?
 
 TARGET COMPLEXITY
 -----------------
@@ -127,25 +110,81 @@ from __future__ import annotations
 class TransactionError(Exception):
     pass
 
+type KVIndex = dict[str, str | tuple[str, float, float]]
 
 class KVStore:
     def __init__(self) -> None:
-        raise NotImplementedError
+        self.index: KVIndex = {}
+        self.transactions: list[KVIndex] = []
 
     def set(self, key: str, value: str, ttl_seconds: float | None = None, *, now: float = 0.0) -> None:
-        raise NotImplementedError
+        self.index[key] = value if ttl_seconds is None else (value, now, now + ttl_seconds)
+
+    def _is_key_expired(self, key: str, now: float = 0.0):
+        return (
+            isinstance(self.index[key], tuple) 
+            and (now < self.index[key][1] or now >= self.index[key][2])
+        )
 
     def get(self, key: str, *, now: float = 0.0) -> str | None:
-        raise NotImplementedError
+        if key not in self.index: return 
+        if self._is_key_expired(key, now): return 
+        
+        return self.index[key][0]
 
     def delete(self, key: str, *, now: float = 0.0) -> bool:
-        raise NotImplementedError
+        if key not in self.index: return False 
+        if self._is_key_expired(key, now): return False
+
+        del self.index[key]
+        return True
 
     def begin(self) -> None:
-        raise NotImplementedError
+        self.transactions.append(self.index.copy())
 
     def commit(self) -> None:
-        raise NotImplementedError
+        if not len(self.transactions): raise TransactionError
+        self.transactions.pop()
 
     def rollback(self) -> None:
-        raise NotImplementedError
+        if not len(self.transactions): raise TransactionError
+        self.index = self.transactions.pop()
+
+
+if __name__ == "__main__":
+    from lib import run_test_cases
+
+    test_cases = [
+        [
+            (KVStore),
+            ("set", ("a", "1"), None),
+            ("get", "a", "1"),
+            ("get", "b", None ),
+            ("delete", "b", False),
+            ("delete", "a", True)
+        ],
+        [
+            (KVStore),
+            ("set", ("a", "1", 10.0), {"now": 5.0}, None),
+            ("get", "a", {"now": 3.0}, None),
+            ("get", "a", {"now": 7.0}, "1"),
+            ("delete", "a", {"now": 0.0}, False),
+            ("delete", "a", {"now": 10.0}, True)
+        ],
+        [
+            (KVStore),
+            ("set", ("a", "1"), None),
+            ("begin", (), None),
+            ("set", ("a", "2"), None),
+            ("get", ("a"), "2"),
+            ("begin", (), None),
+            ("delete", ("a"), True),
+            ("get", ("a"), None),
+            ("rollback", (), None),
+            ("get", ("a"), "2"),
+            ("commit", (), None),
+            ("get", ("a"), "2")
+        ]
+    ]
+
+    run_test_cases(test_cases)

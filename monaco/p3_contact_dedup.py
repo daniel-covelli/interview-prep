@@ -34,6 +34,14 @@ nothing directly.
   drop the leading "1". "(415) 555-0100" ≡ "14155550100" ≡ "415-555-0100".
 - None never matches None.
 
+Examples:
+    normalize_email("  JANE@Acme.com ")  -> "jane@acme.com"
+    normalize_email(None)                -> None
+    normalize_phone("(415) 555-0100")    -> "4155550100"
+    normalize_phone("14155550100")       -> "4155550100"
+    normalize_phone("415-555-0100")      -> "4155550100"
+    normalize_phone(None)                -> None
+
 MERGING — one output record per group. For EACH FIELD independently
 (email, phone, name, title), pick the value from the record with the
 best (source_priority, updated_at) among records where that field is
@@ -46,17 +54,8 @@ are always present; a field that no record in the group has stays None.
 Output list sorted by the smallest id in each group (plain string
 comparison — ids are strings).
 
-EXAMPLES — NORMALIZATION
-------------------------
-    normalize_email("  JANE@Acme.com ")  -> "jane@acme.com"
-    normalize_email(None)                -> None
-    normalize_phone("(415) 555-0100")    -> "4155550100"
-    normalize_phone("14155550100")       -> "4155550100"
-    normalize_phone("415-555-0100")      -> "4155550100"
-    normalize_phone(None)                -> None
-
-EXAMPLE — DEDUPE
-----------------
+EXAMPLE
+-------
     r1 = {"id": "r1", "email": "jane@acme.com", "phone": None,
           "name": "Jane D.", "title": None,
           "source": "import", "updated_at": 100}
@@ -76,16 +75,6 @@ EXAMPLE — DEDUPE
       "title": "VP of Sales",            # manual(50) beats enrichment(200)
     }]
 
-EXAMPLE — EXTENSION 1 (keep the losers)
----------------------------------------
-    Same input as above; each output record additionally carries every
-    distinct normalized value seen in the group:
-      "all_emails": ["jane@acme.com"],   # r1 and r2 normalize to the same email
-      "all_phones": ["4155550100"],      # r2 and r3 normalize to the same phone
-    A group with records jo@x.com and joe@x.com chained via one phone
-    yields all_emails=["jo@x.com", "joe@x.com"] (sorted) even though only
-    one wins the "email" field.
-
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
 - A group may end up with records containing DIFFERENT emails (chained
@@ -98,14 +87,12 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
 - Two candidates for a field never tie exactly on
   (source_priority, updated_at); don't design for it.
 
-EXTENSIONS
-----------
-1. Keep the losers: add "all_emails" / "all_phones" (sorted, normalized,
-   deduped) to each output record.
-2. Batch API: `dedupe_contacts` is called nightly with yesterday's
-   golden records + today's new raw records. What changes?
-3. Discuss only: at 50M records, exact in-memory grouping dies. Sketch
-   the shard-by-normalized-key approach and where transitivity hurts.
+DISCUSS AFTERWARDS
+------------------
+- Batch API: `dedupe_contacts` is called nightly with yesterday's golden
+  records + today's new raw records. What changes?
+- At 50M records, exact in-memory grouping dies. Sketch the
+  shard-by-normalized-key approach and where transitivity hurts.
 
 TARGET COMPLEXITY
 -----------------

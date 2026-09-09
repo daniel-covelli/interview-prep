@@ -153,20 +153,6 @@ def main():
     suite.case("randomized: 250 calendars cross-checked against minute-scan oracle",
                randomized)
 
-    suite.section("EXTENSIONS (skipped until you build them)")
-
-    def ext_first_slot():
-        import monaco.p4_meeting_scheduler as mod
-        if not hasattr(mod, "first_slot"):
-            raise NotImplementedError
-        busy = [[(0, 30), (90, 120)], [(45, 60)]]
-        expect(mod.first_slot(busy, 15, (0, 150)), (30, 45),
-               note="earliest valid start, trimmed to exactly `duration` long")
-        expect(mod.first_slot(busy, 40, (0, 150)), None,
-               note="no gap of 40 minutes inside [0, 150) — expected None")
-        expect(mod.first_slot([[]], 20, (10, 100)), (10, 30))
-    suite.case("extension 1: first_slot", ext_first_slot)
-
     if suite.failed or not suite.passed:
         suite.section("PERFORMANCE")
         reason = ("fix correctness failures first" if suite.failed

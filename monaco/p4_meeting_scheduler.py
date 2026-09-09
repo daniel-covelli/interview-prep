@@ -45,14 +45,6 @@ EXAMPLE
     find_slots([[(0, 200)]], duration=1, window=(50, 150))
     -> []                                   # busy outside the window still clips it
 
-EXAMPLE — EXTENSION 1 (first_slot)
-----------------------------------
-    Same `busy` as above; returns the earliest [start, start+duration),
-    not the whole gap:
-    first_slot(busy, duration=15, window=(0, 150)) -> (30, 45)
-    first_slot(busy, duration=20, window=(0, 150)) -> (60, 80)
-    first_slot(busy, duration=45, window=(0, 150)) -> None
-
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
 - Half-open intervals everywhere; touching ≠ overlapping.
@@ -61,20 +53,18 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
   window (clip it).
 - `duration` is at least 1; the window may be empty (start == end).
 
-EXTENSIONS
-----------
-1. `first_slot(...) -> tuple[int, int] | None` — earliest valid
-   [start, start+duration); can you beat recomputing everything?
-2. Optional attendees: meeting is valid if all required + at least K of
-   the optional attendees are free. Return slots with the attending set.
-   Underspecified on purpose — before coding, pin down with your
-   interviewer what happens when the free optional set changes mid-gap
-   (split the gap?) and which K-subset to report.
-3. Working hours: each attendee also has a daily availability mask
-   (e.g. free only within [540, 1020) each 1440-min day, across a
-   multi-day window). Fold it in without special-casing.
-4. Discuss only: attendees' calendars live in different services and
-   each fetch is a slow network call. How does the algorithm change?
+DISCUSS AFTERWARDS
+------------------
+- Optional attendees: meeting is valid if all required + at least K of
+  the optional attendees are free. Deliberately underspecified — what
+  would you pin down with the interviewer before coding it (does a gap
+  split when the free optional set changes mid-gap? which K-subset is
+  reported)?
+- Working hours: each attendee also has a daily availability mask (e.g.
+  free only within [540, 1020) each 1440-min day, across a multi-day
+  window). How would you fold it in without special-casing?
+- Attendees' calendars live in different services and each fetch is a
+  slow network call. How does the algorithm change?
 
 TARGET COMPLEXITY
 -----------------
