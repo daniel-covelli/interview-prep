@@ -45,23 +45,53 @@ SPEC — PHASE 3 (transactions)
   unexpired) just before the call — so a second delete of the same key
   inside a transaction returns False.
 
-EXAMPLES
---------
+EXAMPLES — PHASE 1
+------------------
+    store = KVStore()
+    store.set("a", "1")
+    store.get("a")            -> "1"
+    store.get("missing")      -> None
+    store.delete("a")         -> True
+    store.get("a")            -> None
+    store.delete("a")         -> False
+
+EXAMPLES — PHASE 2
+------------------
+    store = KVStore()
+    store.set("s", "x", ttl_seconds=10, now=0.0)
+    store.get("s", now=9.9)   -> "x"
+    store.get("s", now=10.0)  -> None      # expired exactly at t0 + T
+    store.set("s", "y", now=11.0)          # re-set: ttl_seconds=None → no expiry
+    store.get("s", now=1e9)   -> "y"
+
+EXAMPLES — PHASE 3
+------------------
+    store = KVStore()
     store.set("a", "1")
     store.begin()
     store.set("a", "2")
     store.get("a")            -> "2"
     store.begin()
-    store.delete("a")
-    store.get("a")            -> None
+    store.delete("a")         -> True
+    store.delete("a")         -> False     # already masked in this txn
+    store.get("a")            -> None      # delete masks the outer "2"
     store.rollback()
     store.get("a")            -> "2"
     store.commit()
     store.get("a")            -> "2"
+    store.commit()            -> raises TransactionError (no open txn)
 
-    store.set("s", "x", ttl_seconds=10, now=0.0)
-    store.get("s", now=9.9)   -> "x"
-    store.get("s", now=10.0)  -> None
+EXAMPLES — EXTENSION 1 (keys)
+-----------------------------
+    store = KVStore()
+    store.set("apple", "1")
+    store.set("app", "2", ttl_seconds=5, now=0.0)
+    store.set("banana", "3")
+    store.begin()
+    store.set("apricot", "4")
+    store.delete("banana")    -> True
+    store.keys("ap", now=6.0) -> ["apple", "apricot"]   # "app" expired at 5.0
+    store.keys("", now=6.0)   -> ["apple", "apricot"]   # "banana" masked by txn delete
 
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
@@ -119,63 +149,3 @@ class KVStore:
 
     def rollback(self) -> None:
         raise NotImplementedError
-
-
-if __name__ == "__main__":
-    import sys
-
-    results: list[bool] = []
-
-    def check(label: str, actual: object, expected: object) -> None:
-        ok = actual == expected
-        results.append(ok)
-        print(f"{'PASS' if ok else 'FAIL'}  {label}  (got {actual!r}, want {expected!r})")
-
-    def scenario(name: str, fn) -> None:
-        try:
-            fn()
-        except NotImplementedError:
-            print(f"SKIP  {name}: not implemented yet")
-
-    def phase1_basic() -> None:
-        store = KVStore()
-        store.set("a", "1")
-        check('get("a")', store.get("a"), "1")
-        check('delete("a")', store.delete("a"), True)
-        check('get("a") after delete', store.get("a"), None)
-        check('delete("a") again', store.delete("a"), False)
-
-    def phase2_ttl() -> None:
-        store = KVStore()
-        store.set("s", "x", ttl_seconds=10, now=0.0)
-        check('get("s", now=9.9)', store.get("s", now=9.9), "x")
-        check('get("s", now=10.0)', store.get("s", now=10.0), None)
-
-    def phase3_transactions() -> None:
-        store = KVStore()
-        store.set("a", "1")
-        store.begin()
-        store.set("a", "2")
-        check('get("a") in txn', store.get("a"), "2")
-        store.begin()
-        store.delete("a")
-        check('get("a") after txn delete', store.get("a"), None)
-        store.rollback()
-        check('get("a") after rollback', store.get("a"), "2")
-        store.commit()
-        check('get("a") after commit', store.get("a"), "2")
-        try:
-            store.commit()
-            check("commit with no open txn", "no exception", "TransactionError")
-        except TransactionError:
-            check("commit with no open txn", "TransactionError", "TransactionError")
-
-    scenario("phase 1 (basic store)", phase1_basic)
-    scenario("phase 2 (TTL)", phase2_ttl)
-    scenario("phase 3 (transactions)", phase3_transactions)
-
-    if not results:
-        print("\nNothing checked yet — implement the stubs, then re-run.")
-        sys.exit(1)
-    print(f"\n{sum(results)}/{len(results)} checks passed.")
-    sys.exit(0 if all(results) else 1)

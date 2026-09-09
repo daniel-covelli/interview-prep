@@ -39,7 +39,19 @@ EXAMPLE
     find_slots(busy, duration=45, window=(0, 150))
     -> []                                   # longest gap is 30 minutes
     find_slots(busy, duration=30, window=(0, 150))
-    -> [(60, 90), (120, 150)]
+    -> [(60, 90), (120, 150)]               # (60, 90) fits duration exactly
+    find_slots([[], []], duration=10, window=(5, 20))
+    -> [(5, 20)]                            # empty calendars: whole window free
+    find_slots([[(0, 200)]], duration=1, window=(50, 150))
+    -> []                                   # busy outside the window still clips it
+
+EXAMPLE — EXTENSION 1 (first_slot)
+----------------------------------
+    Same `busy` as above; returns the earliest [start, start+duration),
+    not the whole gap:
+    first_slot(busy, duration=15, window=(0, 150)) -> (30, 45)
+    first_slot(busy, duration=20, window=(0, 150)) -> (60, 80)
+    first_slot(busy, duration=45, window=(0, 150)) -> None
 
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
@@ -76,39 +88,3 @@ def find_slots(
     window: tuple[int, int],
 ) -> list[tuple[int, int]]:
     raise NotImplementedError
-
-
-if __name__ == "__main__":
-    import sys
-
-    results: list[bool] = []
-
-    def check(label: str, actual: object, expected: object) -> None:
-        ok = actual == expected
-        results.append(ok)
-        print(f"{'PASS' if ok else 'FAIL'}  {label}  (got {actual!r}, want {expected!r})")
-
-    def scenario(name: str, fn) -> None:
-        try:
-            fn()
-        except NotImplementedError:
-            print(f"SKIP  {name}: not implemented yet")
-
-    def docstring_example() -> None:
-        busy = [
-            [(0, 30), (90, 120)],
-            [(45, 60), (45, 55)],
-        ]
-        check("duration=15", find_slots(busy, duration=15, window=(0, 150)),
-              [(30, 45), (60, 90), (120, 150)])
-        check("duration=45", find_slots(busy, duration=45, window=(0, 150)), [])
-        check("duration=30", find_slots(busy, duration=30, window=(0, 150)),
-              [(60, 90), (120, 150)])
-
-    scenario("docstring example", docstring_example)
-
-    if not results:
-        print("\nNothing checked yet — implement the stubs, then re-run.")
-        sys.exit(1)
-    print(f"\n{sum(results)}/{len(results)} checks passed.")
-    sys.exit(0 if all(results) else 1)

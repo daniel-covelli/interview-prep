@@ -46,8 +46,17 @@ are always present; a field that no record in the group has stays None.
 Output list sorted by the smallest id in each group (plain string
 comparison — ids are strings).
 
-EXAMPLE
--------
+EXAMPLES — NORMALIZATION
+------------------------
+    normalize_email("  JANE@Acme.com ")  -> "jane@acme.com"
+    normalize_email(None)                -> None
+    normalize_phone("(415) 555-0100")    -> "4155550100"
+    normalize_phone("14155550100")       -> "4155550100"
+    normalize_phone("415-555-0100")      -> "4155550100"
+    normalize_phone(None)                -> None
+
+EXAMPLE — DEDUPE
+----------------
     r1 = {"id": "r1", "email": "jane@acme.com", "phone": None,
           "name": "Jane D.", "title": None,
           "source": "import", "updated_at": 100}
@@ -66,6 +75,16 @@ EXAMPLE
       "name": "Jane D.",                 # import(100) beats enrichment(200)
       "title": "VP of Sales",            # manual(50) beats enrichment(200)
     }]
+
+EXAMPLE — EXTENSION 1 (keep the losers)
+---------------------------------------
+    Same input as above; each output record additionally carries every
+    distinct normalized value seen in the group:
+      "all_emails": ["jane@acme.com"],   # r1 and r2 normalize to the same email
+      "all_phones": ["4155550100"],      # r2 and r3 normalize to the same phone
+    A group with records jo@x.com and joe@x.com chained via one phone
+    yields all_emails=["jo@x.com", "joe@x.com"] (sorted) even though only
+    one wins the "email" field.
 
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
@@ -107,56 +126,3 @@ def normalize_phone(phone: str | None) -> str | None:
 
 def dedupe_contacts(records: list[dict]) -> list[dict]:
     raise NotImplementedError
-
-
-if __name__ == "__main__":
-    import sys
-
-    results: list[bool] = []
-
-    def check(label: str, actual: object, expected: object) -> None:
-        ok = actual == expected
-        results.append(ok)
-        print(f"{'PASS' if ok else 'FAIL'}  {label}  (got {actual!r}, want {expected!r})")
-
-    def scenario(name: str, fn) -> None:
-        try:
-            fn()
-        except NotImplementedError:
-            print(f"SKIP  {name}: not implemented yet")
-
-    def normalization() -> None:
-        check('normalize_email("JANE@acme.com ")', normalize_email("JANE@acme.com "), "jane@acme.com")
-        check("normalize_email(None)", normalize_email(None), None)
-        check('normalize_phone("(415) 555-0100")', normalize_phone("(415) 555-0100"), "4155550100")
-        check('normalize_phone("14155550100")', normalize_phone("14155550100"), "4155550100")
-        check('normalize_phone("415-555-0100")', normalize_phone("415-555-0100"), "4155550100")
-        check("normalize_phone(None)", normalize_phone(None), None)
-
-    def docstring_example() -> None:
-        r1 = {"id": "r1", "email": "jane@acme.com", "phone": None,
-              "name": "Jane D.", "title": None,
-              "source": "import", "updated_at": 100}
-        r2 = {"id": "r2", "email": "JANE@acme.com ", "phone": "415-555-0100",
-              "name": "Jane Doe", "title": "VP Sales",
-              "source": "enrichment", "updated_at": 200}
-        r3 = {"id": "r3", "email": None, "phone": "(415) 555-0100",
-              "name": None, "title": "VP of Sales",
-              "source": "manual", "updated_at": 50}
-        expected = [{
-            "ids": ["r1", "r2", "r3"],
-            "email": "jane@acme.com",
-            "phone": "4155550100",
-            "name": "Jane D.",
-            "title": "VP of Sales",
-        }]
-        check("dedupe_contacts([r1, r2, r3])", dedupe_contacts([r1, r2, r3]), expected)
-
-    scenario("normalization", normalization)
-    scenario("docstring example", docstring_example)
-
-    if not results:
-        print("\nNothing checked yet — implement the stubs, then re-run.")
-        sys.exit(1)
-    print(f"\n{sum(results)}/{len(results)} checks passed.")
-    sys.exit(0 if all(results) else 1)

@@ -35,6 +35,28 @@ EXAMPLES
     limiter.allow("mbox_a", 11.1)  -> True    # request at 1.0 has aged out
     limiter.allow("mbox_b", 3.0)   -> True    # independent key
 
+EXAMPLES — EXTENSION 1 (remaining)
+----------------------------------
+    limiter = RateLimiter(max_requests=2, window_seconds=10.0)
+    limiter.allow("mbox_a", 1.0)      -> True
+    limiter.remaining("mbox_a", 1.0)  -> 1
+    limiter.allow("mbox_a", 2.0)      -> True
+    limiter.remaining("mbox_a", 2.0)  -> 0
+    limiter.remaining("mbox_a", 11.5) -> 2    # both requests aged out
+    limiter.remaining("never_seen", 0.0) -> 2
+
+EXAMPLES — EXTENSION 3 (overrides)
+----------------------------------
+    limiter = RateLimiter(max_requests=2, window_seconds=10.0,
+                          overrides={"vip_mbox": 3})
+    limiter.allow("vip_mbox", 1.0) -> True
+    limiter.allow("vip_mbox", 1.1) -> True
+    limiter.allow("vip_mbox", 1.2) -> True    # third allowed by override
+    limiter.allow("vip_mbox", 1.3) -> False
+    limiter.allow("other", 2.0)    -> True
+    limiter.allow("other", 2.1)    -> True
+    limiter.allow("other", 2.2)    -> False   # default cap of 2 still applies
+
 ASSUMPTIONS YOU'D NORMALLY HAVE TO ASK ABOUT (decided here)
 -----------------------------------------------------------
 - Denied requests are not recorded (no penalty).

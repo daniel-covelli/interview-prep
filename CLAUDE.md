@@ -63,6 +63,11 @@ never time.time().
 EXAMPLES
 --------
 Copy-pasteable calls with -> expected values, including one tricky case.
+Sufficient examples for EVERY separately implementable step — each phase
+of a phased spec, each stubbed helper function, and each codeable
+extension gets its own example block (EXAMPLES — PHASE 2, EXAMPLES —
+EXTENSION 1 (name), …). Daniel writes his own verification from these
+examples alone, so a step without examples is unverifiable.
 
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
@@ -81,11 +86,15 @@ The asymptotic bar the perf tests enforce.
 """
 ```
 
-After the stubs, optionally add an `if __name__ == "__main__":` self-check
-block (PASS/FAIL prints of the docstring examples, SKIP on
-NotImplementedError) so the file runs standalone; the real coverage lives
-in the test suite. Keep any `raise NotImplementedError` stubs — the grader
-reports them as `- skipped (not implemented yet)`, never as failures.
+A problem file contains NOTHING beyond the docstring and the
+`raise NotImplementedError` stubs (plus any exception classes the spec
+names). Never add an `if __name__ == "__main__":` block, self-checks, or
+any other verification code — every example must live in the docstring
+(EXAMPLES section), and Daniel writes his own `__main__` checks with
+`run_test_cases` from lib.py as part of practicing. Real
+coverage lives in the test suite. Keep the `raise NotImplementedError`
+stubs — the grader reports them as `- skipped (not implemented yet)`,
+never as failures.
 
 ## Test suites
 
