@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from grader import (Suite, PerfConcern, load_class, bench, fmt_s, tracing,
                       expect)
 
-KEY = "m1"
 SEED = 0xC0FFEE
 
 
@@ -143,12 +142,12 @@ def main():
         rng = random.Random(SEED)
         rl = make(3, 50.0)
         oracle = Oracle(3, 50.0)
-        clocks = {}
+        # one shared clock: globally non-decreasing, which extension 2's
+        # idle-key cleanup is allowed to assume (per-key ordering follows)
+        ts = 0.0
         for op in range(5_000):
             key = f"mbox{rng.randrange(8)}"
-            # per-key non-decreasing timestamps, as the spec guarantees
-            ts = clocks.get(key, 0.0) + rng.choice([0.0, 0.1, 1.0, 7.0, 30.0, 120.0])
-            clocks[key] = ts
+            ts += rng.choice([0.0, 0.0, 0.1, 0.5, 1.0, 8.0])
             expect(rl.allow(key, ts), oracle.allow(key, ts),
                    note=f"seed={SEED:#x}, op={op}, allow({key!r}, {ts})")
     suite.case("randomized: 5k calls over 8 keys cross-checked against oracle",

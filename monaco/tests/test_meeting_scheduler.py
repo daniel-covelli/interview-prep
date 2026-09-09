@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from grader import (Suite, PerfConcern, Failure, load_fn, bench, fmt_s,
                     expect, short)
 
-KEY = "m4"
 SEED = 0x5107
 
 

@@ -4,9 +4,9 @@
 # brute-force oracles and enumerate the edge cases. Reading them spoils the
 # exercise — just run:
 #
-#   uv run grade                    # everything
-#   uv run grade m1                 # one problem
-#   uv run grade monaco             # one company's set
+#   uv run grade                            # everything
+#   uv run grade monaco/p1_rate_limiter.py  # one problem
+#   uv run grade monaco                     # one company's set
 #
 import importlib
 import sys
@@ -44,10 +44,12 @@ class PerfConcern(Exception):
 # ---- LeetCode-style failure output -----------------------------------------
 #
 # Correctness cases wrap the object under test with `tracing(cls)`, which
-# records every method call. When a case fails, the recorded calls replay as
-# an "Input:" block — the last call (the one whose result was wrong) on its
-# own "→" line — followed by "Output:" and "Expected:". Performance cases
-# don't trace and report exactly as before.
+# records the constructor call and every method call (with its return value).
+# When a case fails, the recorded calls replay as an "Input:" block — the
+# constructor first, prior calls with their actual results, and the last call
+# (the one whose result was wrong) on its own "→" line — followed by
+# "Output:" and "Expected:". Performance cases don't trace and report
+# exactly as before.
 
 _UNSET = object()
 _LABEL_W = 10          # width of "Expected: ", the widest label
@@ -91,13 +93,16 @@ _traces = []       # tracing() instances created during the running case
 _call_seq = 0      # global counter so the overall-last call gets the "→"
 
 
+_PENDING = object()    # a traced call's result before/unless it returns
+
+
 class _Traced:
     """Transparent proxy that records method calls for failure replay."""
 
-    def __init__(self, obj, name):
+    def __init__(self, obj, ctor):
         self._obj = obj
-        self._name = name
-        self._log = []                     # (seq, method, args, kwargs)
+        self._ctor = ctor                  # "ClassName(args...)" repr
+        self._log = []                     # [seq, method, args, kwargs, result]
         _traces.append(self)
 
     def __getattr__(self, name):
@@ -108,14 +113,17 @@ class _Traced:
         def call(*args, **kwargs):
             global _call_seq
             _call_seq += 1
-            self._log.append((_call_seq, name, args, kwargs))
-            return attr(*args, **kwargs)
+            entry = [_call_seq, name, args, kwargs, _PENDING]
+            self._log.append(entry)
+            result = attr(*args, **kwargs)
+            entry[4] = result
+            return result
         return call
 
 
 def tracing(cls):
     """Factory for cls whose instances record their calls for Input replay."""
-    return lambda *a, **kw: _Traced(cls(*a, **kw), cls.__name__)
+    return lambda *a, **kw: _Traced(cls(*a, **kw), _fmt_call(cls.__name__, a, kw))
 
 
 def expect(output, expected, note=None):
@@ -255,17 +263,26 @@ class Suite:
         last_seq = max(t._log[-1][0] for t in traces)
         many = len(traces) > 1
         label = "Input:"
+
+        def fmt_entry(m, a, kw, res):
+            call = _fmt_call(m, a, kw)
+            # show each prior call's actual return so state history is visible
+            # (None results are elided; they're almost always mutators)
+            if res is _PENDING or res is None:
+                return call
+            return f"{call} -> {short(res, 48)}"
+
         for i, t in enumerate(traces):
             entries = list(t._log)
             arrow = None
             if entries[-1][0] == last_seq:
-                _, m, a, kw = entries.pop()
+                _, m, a, kw, _res = entries.pop()
                 arrow = _fmt_call(m, a, kw)
-            calls = [_fmt_call(m, a, kw) for _, m, a, kw in entries]
+            calls = [fmt_entry(m, a, kw, res) for _, m, a, kw, res in entries]
             if len(calls) > _MAX_CALLS:
                 omitted = len(calls) - 27
                 calls = calls[:12] + [f"[… {omitted} calls omitted …]"] + calls[-15:]
-            name = f"{t._name} #{i + 1}" if many else t._name
+            name = f"{t._ctor} #{i + 1}" if many else t._ctor
             body = "; ".join(calls) if calls else "(fresh instance)"
             self._io(label, f"{name}: {body}")
             if arrow is not None:

@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from grader import (Suite, PerfConcern, Failure, load_fn, bench, fmt_s,
                     expect)
 
-KEY = "m3"
 SEED = 0xDED0
 
 _PRIORITY = {"manual": 2, "import": 1, "enrichment": 0}

@@ -47,6 +47,7 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
 - An attendee with an empty busy list is free for the whole window.
 - Busy time outside `window` still matters only where it intersects the
   window (clip it).
+- `duration` is at least 1; the window may be empty (start == end).
 
 EXTENSIONS
 ----------
@@ -54,6 +55,9 @@ EXTENSIONS
    [start, start+duration); can you beat recomputing everything?
 2. Optional attendees: meeting is valid if all required + at least K of
    the optional attendees are free. Return slots with the attending set.
+   Underspecified on purpose — before coding, pin down with your
+   interviewer what happens when the free optional set changes mid-gap
+   (split the gap?) and which K-subset to report.
 3. Working hours: each attendee also has a daily availability mask
    (e.g. free only within [540, 1020) each 1440-min day, across a
    multi-day window). Fold it in without special-casing.

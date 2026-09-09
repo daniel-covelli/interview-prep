@@ -41,7 +41,10 @@ non-None. source_priority: manual > import > enrichment; updated_at
 (newer wins) breaks ties within a priority level.
 Output record: {"ids": [...all merged record ids, sorted...], "email": ...,
 "phone": ..., "name": ..., "title": ...} with email/phone in normalized
-form. Output list sorted by the smallest id in each group.
+form and name/title verbatim from their winning records. All five keys
+are always present; a field that no record in the group has stays None.
+Output list sorted by the smallest id in each group (plain string
+comparison — ids are strings).
 
 EXAMPLE
 -------
@@ -71,6 +74,10 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
   losing email is dropped, not kept as an alias.
 - Input fits in memory; no streaming.
 - Names are never used for matching (too fuzzy).
+- A value that normalizes to the empty string (e.g. a phone with no
+  digits) matches nothing, same as None.
+- Two candidates for a field never tie exactly on
+  (source_priority, updated_at); don't design for it.
 
 EXTENSIONS
 ----------

@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Daniel's Python interview prep — problems, grader, personal helpers"
 requires-python = ">=3.13"
 
-# The pnpm-script equivalent: `uv run grade [key|company]`
+# The pnpm-script equivalent: `uv run grade [path|company]`
 [project.scripts]
 grade = "grader.cli:main"
 

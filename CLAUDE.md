@@ -17,7 +17,9 @@ pyproject.toml                  uv project; `grade = "grader.cli:main"` entry po
   tests/test_<problem>.py       that problem's grader suite
 ```
 
-Tooling is uv: run everything as `uv run grade [key|company]` and problem
+Tooling is uv: run everything as `uv run grade [path|company]` (e.g.
+`uv run grade monaco/p2_kv_store.py` — problem file or test file path,
+`.py` optional — or a company folder name for the whole set) and problem
 files as `uv run <company>/<problem>.py` — uv owns `.venv`, installs the
 tooling modules editable (see pyproject.toml), and pins Python via
 `.python-version`. Never add a venv-activation or `python3.13` step to
@@ -32,7 +34,8 @@ directly: `from lib import run_test_cases`. Add new personal helpers to
 company folder.
 
 Python 3.13+, standard library only. Nothing is registered anywhere:
-the CLI globs `*/tests/test_*.py` and reads each file's `KEY`.
+the CLI globs `*/tests/test_*.py` and addresses each suite by its path
+(a `pN_` prefix on the problem file is ignored when matching).
 
 ## Problem files
 
@@ -99,10 +102,9 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
    from grader import (Suite, PerfConcern, load_class, tracing, expect, ...)
 
-   KEY = "m5"          # <prefix><number>; prefix = short company tag (jb, m, …)
    SEED = 0x...        # fixed seed; never random.seed() elsewhere
    ```
-   `KEY` is how the CLI finds the suite; keys must be unique repo-wide.
+   The CLI finds the suite by its file path — no key or registration.
 3. **Structure of `main()`** (must return `suite.summary()`; end the file
    with `if __name__ == "__main__": sys.exit(1 if main().failed else 0)`):
    - Load via `load_class("company.module", "ClassName")` /
@@ -168,11 +170,10 @@ Inside a case: raising `NotImplementedError` → skip; `Failure`/`AssertionError
 ## Adding a company set
 
 1. `mkdir <company> <company>/tests` — that's the whole setup.
-2. Pick an unused short key prefix (letters only — it becomes a CLI
-   group alias, alongside the folder name).
-3. Add problem files and test suites per the formats above.
-4. `uv run grade <prefix>` — discovery is automatic; if the new
-   suite doesn't appear, its `KEY` line is missing or duplicated.
+2. Add problem files and test suites per the formats above.
+3. `uv run grade <company>` — discovery is automatic; if the new
+   suite doesn't appear, its test file doesn't match
+   `<company>/tests/test_*.py`.
 
 Keep this file authoritative: format changes belong here, in the same
 commit that introduces them.

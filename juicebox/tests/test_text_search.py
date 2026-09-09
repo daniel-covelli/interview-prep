@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from grader import (Suite, PerfConcern, Failure, desc, load_class, bench,
                       fmt_s, short, tracing, expect, expect_set, expect_len)
 
-KEY = "jb3"
 SEED = 0x5EA2C4
 
 

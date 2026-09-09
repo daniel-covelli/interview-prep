@@ -1,15 +1,15 @@
 # LeetCode-style grader: runs your current implementations against the full
 # correctness + performance suites.
 #
-#   uv run grade                    # all problems
-#   uv run grade m1                 # just one
-#   uv run grade monaco             # one company's set (folder name or key prefix)
+#   uv run grade                     # all problems
+#   uv run grade monaco/kv_store.py  # one problem (problem file or test file path)
+#   uv run grade monaco              # one company's set (folder name)
 #
 # ✓ pass    ✗ bug or scaling failure    ⚠ concern worth having an answer for
 #
-# Suites are auto-discovered: every <company>/tests/test_*.py that declares a
-# KEY (e.g. KEY = "m5") is picked up — nothing to register here. A company's
-# whole set runs via its folder name or the key's letter prefix.
+# Suites are auto-discovered: every <company>/tests/test_*.py is picked up —
+# nothing to register here. Address one problem by path (the problem file or
+# its test file, `.py` optional) and a company's whole set by its folder name.
 import importlib.util
 import re
 import sys
@@ -29,36 +29,26 @@ def _load(path):
 
 
 def discover():
-    problems, folders = {}, {}
+    suites, folders, aliases = {}, {}, {}
     for f in sorted(ROOT.glob("*/tests/test_*.py")):
-        mod = _load(f)
-        key = getattr(mod, "KEY", None)
-        if key is None:
-            print(f'warning: {f} has no KEY = "..." declaration — skipping it')
-            continue
-        if key in problems:
-            print(f"error: KEY {key!r} declared by two test files")
-            sys.exit(2)
-        problems[key] = mod
-        folders.setdefault(f.parts[-3], []).append(key)
-
-    def sort_key(k):
-        m = re.fullmatch(r"([a-z]+)(\d+)", k)
-        return (m.group(1), int(m.group(2))) if m else (k, 0)
-
-    problems = dict(sorted(problems.items(), key=lambda kv: sort_key(kv[0])))
-    groups = {co: sorted(ks, key=sort_key) for co, ks in folders.items()}
-    for k in problems:                               # "m" works like "monaco"
-        groups.setdefault(k.rstrip("0123456789"), []).append(k)
-    return problems, groups
+        company, prob = f.parts[-3], f.stem.removeprefix("test_")
+        name = f"{company}/{prob}"
+        suites[name] = _load(f)
+        folders.setdefault(company, []).append(name)
+        aliases[name] = name
+        aliases[f"{company}/tests/{f.stem}"] = name
+        for src in (ROOT / company).glob("*.py"):    # e.g. monaco/p2_kv_store.py
+            if re.sub(r"^p\d+_", "", src.stem) == prob:
+                aliases[f"{company}/{src.stem}"] = name
+    return suites, folders, aliases
 
 
-def run(problems, keys):
-    suites = [problems[k].main() for k in keys]
-    failed = sum(s.failed for s in suites)
-    warned = sum(s.warned for s in suites)
-    passed = sum(s.passed for s in suites)
-    skipped = sum(s.skipped for s in suites)
+def run(suites, names):
+    results = [suites[n].main() for n in names]
+    failed = sum(s.failed for s in results)
+    warned = sum(s.warned for s in results)
+    passed = sum(s.passed for s in results)
+    skipped = sum(s.skipped for s in results)
     print("\n" + "=" * 70)
     verdict = "ACCEPTED" if failed == 0 else "WRONG ANSWER / TLE"
     print(f" {verdict}: {passed} passed, {failed} failed, "
@@ -68,20 +58,21 @@ def run(problems, keys):
 
 
 def main(argv=None):
-    problems, groups = discover()
+    suites, folders, aliases = discover()
     args = sys.argv[1:] if argv is None else argv
     if not args:
-        keys = list(problems)
+        names = list(suites)
     else:
-        keys = []
+        names = []
         for a in args:
-            matched = groups.get(a, [a] if a in problems else None)
+            norm = a.removeprefix("./").rstrip("/").removesuffix(".py")
+            matched = folders.get(norm) or ([aliases[norm]] if norm in aliases else None)
             if matched is None:
-                options = ", ".join(list(problems) + list(groups))
+                options = ", ".join(list(folders) + list(suites))
                 print(f"unknown problem {a!r} — use one of: {options}")
                 sys.exit(2)
-            keys.extend(k for k in matched if k not in keys)
-    sys.exit(run(problems, keys))
+            names.extend(n for n in matched if n not in names)
+    sys.exit(run(suites, names))
 
 
 if __name__ == "__main__":

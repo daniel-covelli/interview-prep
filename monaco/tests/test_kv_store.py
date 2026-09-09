@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from grader import (Suite, PerfConcern, load_class, bench, fmt_s, tracing,
                       expect, expect_raises)
 
-KEY = "m2"
 SEED = 0x5EED2
 
 
@@ -250,11 +249,11 @@ def main():
                note="the TTL write rolled back with its layer; the base "
                     "entry (no TTL) is untouched")
         st.begin()
-        st.set("t2", "x", ttl_seconds=10, now=0.0)
+        st.set("t2", "x", ttl_seconds=10, now=5.0)
         st.commit()
-        expect(st.get("t2", now=9.9), "x",
+        expect(st.get("t2", now=14.9), "x",
                note="TTL metadata must survive the commit merge")
-        expect(st.get("t2", now=10.0), None)
+        expect(st.get("t2", now=15.0), None)
     suite.case("TTL metadata commits and rolls back with its layer", ttl_inside_txn)
 
     def randomized():
@@ -303,8 +302,6 @@ def main():
         st.set("post:1", "c")
         expect(st.keys("user:", now=0.0), ["user:1", "user:2"],
                note="alive keys with the prefix, sorted")
-        expect(st.keys("user:", now=10.0), ["user:1"],
-               note="expired keys must not be listed")
         expect(st.keys("", now=0.0), ["post:1", "user:1", "user:2"],
                note="empty prefix matches everything")
         expect(st.keys("zzz", now=0.0), [])
@@ -313,6 +310,11 @@ def main():
         st.delete("user:1")
         expect(st.keys("user:", now=0.0), ["user:2", "user:3"],
                note="keys() must respect open-transaction writes and deletes")
+        # `now` must never rewind within one store: an extension-2 sweep is
+        # allowed to purge what it sees expire, so this check comes last
+        expect(st.keys("user:", now=10.0), ["user:3"],
+               note="expired keys must not be listed (user:2's TTL is up; "
+                    "user:1 is still masked by the transactional delete)")
     suite.case("extension 1: keys(prefix)", ext_keys_prefix)
 
     if suite.failed or not suite.passed:
@@ -325,13 +327,16 @@ def main():
     suite.section("PERFORMANCE")
 
     def churn(n_ops):
+        # keep `now` monotone across all three loops (the spec grants it)
+        # and TTLs long enough that every access stays on the hit path
         st = cls()
         for i in range(n_ops):
-            st.set(f"k{i}", "v", ttl_seconds=(60.0 if i % 3 else None), now=float(i))
+            st.set(f"k{i}", "v", ttl_seconds=(10.0 * n_ops if i % 3 else None),
+                   now=float(i))
         for i in range(n_ops):
-            st.get(f"k{i}", now=float(i))
+            st.get(f"k{i}", now=float(n_ops + i))
         for i in range(0, n_ops, 2):
-            st.delete(f"k{i}", now=float(n_ops))
+            st.delete(f"k{i}", now=float(2 * n_ops))
 
     def crud_scaling():
         t_small = bench(lambda: churn(15_000), repeat=2)

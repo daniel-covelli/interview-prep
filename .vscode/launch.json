@@ -34,8 +34,8 @@
     {
       "id": "problemKey",
       "type": "promptString",
-      "description": "Problem key or company (e.g. m1, jb2, monaco)",
-      "default": "m1"
+      "description": "Problem path or company (e.g. monaco/p1_rate_limiter.py, monaco)",
+      "default": "monaco/rate_limiter"
     }
   ]
 }

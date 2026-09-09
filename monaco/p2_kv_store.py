@@ -41,6 +41,9 @@ SPEC — PHASE 3 (transactions)
 - commit/rollback with no open transaction raises TransactionError.
 - Deletes inside a transaction must mask outer values (a get after a
   transactional delete returns None even though the base layer has the key).
+- `delete` returns True iff the key was visible through the layers (and
+  unexpired) just before the call — so a second delete of the same key
+  inside a transaction returns False.
 
 EXAMPLES
 --------
@@ -66,11 +69,17 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
 - `now` is monotonic non-decreasing across calls.
 - TTL interacts with transactions naively: TTL metadata is just part of
   the value entry and commits/rolls back with it.
+- An expired entry is absent IN ITS OWN LAYER: a read that finds an
+  expired transactional entry falls through to outer layers, which may
+  still hold a live value.
 
 EXTENSIONS
 ----------
-1. `keys(prefix: str, *, now: float = 0.0) -> list[str]` — alive keys with
-   the prefix, sorted. What's the cost, and how would a trie change it?
+1. `keys(prefix: str, *, now: float = 0.0) -> list[str]` — alive keys
+   starting with `prefix` ("" matches everything), lexicographically
+   sorted, and seen through any open transactions: uncommitted writes
+   are listed, transactionally-deleted keys are not. What's the cost,
+   and how would a trie change it?
 2. Make expired keys actually free memory eventually without a thread
    (hint: opportunistic sweep budget per call).
 3. Discuss only: how would you support `get` at a past timestamp
