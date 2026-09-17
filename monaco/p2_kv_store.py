@@ -115,11 +115,15 @@ type KVIndex = dict[str, str | tuple[str, float, float]]
 class KVStore:
     def __init__(self) -> None:
         self.index: KVIndex = {}
-        self.transactions: list[KVIndex] = []
+        self.transactions: list[list] = []
 
     def set(self, key: str, value: str, ttl_seconds: float | None = None, *, now: float = 0.0) -> None:
+        if len(self.transactions):
+            operation = ("delete", (key,)) if key not in self.index else ("set", (key, self.index[key]))
+            self.transactions[-1].append(operation)
+        
         self.index[key] = value if ttl_seconds is None else (value, now, now + ttl_seconds)
-
+        
     def _is_key_expired(self, key: str, now: float = 0.0):
         return (
             isinstance(self.index[key], tuple) 
@@ -130,25 +134,34 @@ class KVStore:
         if key not in self.index: return 
         if self._is_key_expired(key, now): return 
         
-        return self.index[key][0]
+        return self.index[key][0] if isinstance(self.index[key], tuple) else self.index[key]
 
     def delete(self, key: str, *, now: float = 0.0) -> bool:
         if key not in self.index: return False 
         if self._is_key_expired(key, now): return False
 
+        if len(self.transactions):
+            self.transactions[-1].append(("set", (key, self.index[key])))
+
         del self.index[key]
         return True
 
     def begin(self) -> None:
-        self.transactions.append(self.index.copy())
+        self.transactions.append([])
 
     def commit(self) -> None:
         if not len(self.transactions): raise TransactionError
-        self.transactions.pop()
+        old = self.transactions.pop()
+        if len(self.transactions):
+            self.transactions[-1].extend(old)
 
     def rollback(self) -> None:
         if not len(self.transactions): raise TransactionError
-        self.index = self.transactions.pop()
+        for operation, (key, *rest) in reversed(self.transactions.pop()):
+            if operation == "set":
+                self.index[key] = tuple(rest) if len(rest) > 1 else rest[0]
+            else:
+                del self.index[key]
 
 
 if __name__ == "__main__":
@@ -184,6 +197,43 @@ if __name__ == "__main__":
             ("get", ("a"), "2"),
             ("commit", (), None),
             ("get", ("a"), "2")
+        ],
+        [
+            (KVStore),
+            ("set", ("a", "1"), None),
+            ("begin", (), None),
+            ("set", ("a", "2"), None),
+            ("begin", (), None),
+            ("delete", ("a"), True),
+            ("rollback", (), None),
+            ("rollback", (), None),
+            ("get", ("a"), "1")
+        ],
+        [
+            (KVStore),
+            ("begin", (), None),
+            ("set", ("k5", "9"), None),
+            ("rollback", (), None),
+            ("get", "k5", None)
+        ],
+        [
+            (KVStore),
+            ("set", ("k2", "v1"), None),
+            ("begin", (), None),
+            ("delete", ("k2",), True),
+            ("set", ("k2", "v2"), None),
+            ("rollback", (), None),
+            ("get", "k2", "v1")
+        ],
+        [
+            (KVStore),
+            ("set", ("k7", "v1"), None),
+            ("begin", (), None),
+            ("begin", (), None),
+            ("set", ("k7", "v2"), None),
+            ("commit", (), None),
+            ("rollback", (), None),
+            ("get", "k7", "v1")
         ]
     ]
 

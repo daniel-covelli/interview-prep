@@ -40,6 +40,8 @@ Examples:
     normalize_phone("(415) 555-0100")    -> "4155550100"
     normalize_phone("14155550100")       -> "4155550100"
     normalize_phone("415-555-0100")      -> "4155550100"
+    normalize_phone("5550100")           -> "5550100"      # <11 digits: untouched
+    normalize_phone("21234567890")       -> "21234567890"  # 11 digits, no leading 1: keep all
     normalize_phone(None)                -> None
 
 MERGING — one output record per group. For EACH FIELD independently
@@ -65,6 +67,9 @@ EXAMPLE
     r3 = {"id": "r3", "email": None, "phone": "(415) 555-0100",
           "name": None, "title": "VP of Sales",
           "source": "manual", "updated_at": 50}
+    r4 = {"id": "r2", "email": "daniel@acme.com ", "phone": "415-555-0100",
+              "name": "Jane Doe", "title": "VP Sales",
+              "source": "enrichment", "updated_at": 200}
 
     dedupe_contacts([r1, r2, r3]) ->
     [{
@@ -104,12 +109,85 @@ from __future__ import annotations
 
 
 def normalize_email(email: str | None) -> str | None:
-    raise NotImplementedError
+    if email is None:
+        return None
+    return email.strip().lower()
 
 
 def normalize_phone(phone: str | None) -> str | None:
-    raise NotImplementedError
+    if phone is None:
+        return None
+    digits = "".join(char for char in phone if char.isdigit())
+    if len(digits) == 11 and digits[0] == "1":
+        return digits[1:]
+    return digits
+
+
+SOURCE_PRIORITY = {"manual": 3, "import": 2, "enrichment": 1}
 
 
 def dedupe_contacts(records: list[dict]) -> list[dict]:
-    raise NotImplementedError
+    parent = {record["id"]: record["id"] for record in records}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]  # path compression
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        parent[find(a)] = find(b)
+
+    first_owner: dict[str, str] = {}  # normalized key -> id of first record with it
+    for record in records:
+        keys = [normalize_email(record["email"]), normalize_phone(record["phone"])]
+        for key in keys:
+            if not key:  # None or "" matches nothing
+                continue
+            if key in first_owner:
+                union(record["id"], first_owner[key])
+            else:
+                first_owner[key] = record["id"]
+
+    groups: dict[str, list[dict]] = {}
+    for record in records:
+        root = find(record["id"])
+        groups.setdefault(root, []).append(record)
+
+    def best_value(group: list[dict], field: str):
+        candidates = [r for r in group if r[field] is not None]
+        if not candidates:
+            return None
+        winner = max(
+            candidates,
+            key=lambda r: (SOURCE_PRIORITY[r["source"]], r["updated_at"]),
+        )
+        return winner[field]
+
+    merged = []
+    for group in groups.values():
+        merged.append({
+            "ids": sorted(r["id"] for r in group),
+            "email": normalize_email(best_value(group, "email")),
+            "phone": normalize_phone(best_value(group, "phone")),
+            "name": best_value(group, "name"),
+            "title": best_value(group, "title"),
+        })
+        
+    merged.sort(key=lambda g: g["ids"][0])
+    return merged
+
+
+if __name__ == "__main__":
+    from lib import run_test_cases
+
+    test_cases = [
+        [
+          (normalize_email, "  JANE@Acme.com ", "jane@acme.com"),
+          (normalize_email, None, None),
+          (normalize_phone, "(415) 555-0100", "4155550100"),
+          (normalize_phone, "14155550100", "4155550100")
+        ]
+    ]
+
+    run_test_cases(test_cases)
