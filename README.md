@@ -6,8 +6,8 @@ performance suites against whatever is currently in the problem files.
 
 ```
 juicebox/       3 problems (solved) — top-k counter, video views, text search
-monaco/         4 problems (scaffolds) — rate limiter, KV store w/ TTL+txns,
-                contact dedup, meeting scheduler
+monaco/         5 problems — rate limiter, KV store w/ TTL+txns,
+                contact dedup, meeting scheduler, LRU cache (warm-up)
 grader/         shared test harness + the `grade` CLI (nothing interview-relevant inside)
 scratch.py      free-for-all snippet pad; nothing imports it
 lib.py          my own helpers (run_test_cases, …), importable from any
