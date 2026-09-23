@@ -26,6 +26,9 @@ tooling modules editable (see pyproject.toml), and pins Python via
 docs or scripts; without uv the fallbacks are `python3.13 -m grader` and
 `python3.13 -m company.problem`.
 
+`uv run grade --reveal <path>` prints the suite's reference solution — the
+timebox off-ramp (see Test suites, item 7). Never before the timer ends.
+
 Company folders are plain namespace packages — no `__init__.py`, no
 registration anywhere (grader/cli.py discovers by glob; never list company
 folders in pyproject.toml). Problem files import Daniel's helpers
@@ -95,6 +98,55 @@ The asymptotic bar the perf tests enforce.
 """
 ```
 
+**NEVER name a data structure or algorithm anywhere in the docstring.**
+Not in SPEC, EXAMPLES, ASSUMPTIONS, DISCUSS AFTERWARDS, or TARGET
+COMPLEXITY. No "use a heap", no "`OrderedDict` is fair game", no
+"the classic dict + doubly-linked list", no "how would a trie change
+it", no "hint: binary search". Picking the structure IS the exercise;
+the docstring states behavior and the complexity bar, nothing else.
+Follow-up questions in DISCUSS AFTERWARDS ask about *properties*
+("how do you get O(1) from primitives?"), never about a named
+structure. Before committing a new problem, grep the file for
+structure/algorithm names (heap, deque, OrderedDict, trie, linked
+list, bisect, Counter, BST, sort, two-pointer, sliding window, …)
+and rewrite any hit.
+
+## Difficulty tiers and timeboxes (hard limits)
+
+The header's tier and timebox are promises. A broken one costs Daniel
+hours, not minutes (2026-09-16: p4, labeled "medium | 40 min", took four
+hours). Tiers are set by the REFERENCE SOLUTION, never by how the problem
+feels: write the reference first, then classify, and never round down —
+when in doubt, the next tier up.
+
+| tier        | reference solution | timebox   | shape |
+|-------------|--------------------|-----------|-------|
+| warm-up     | ≤ 20 lines         | 15–25 min | one function, or ctor + ≤ 2 methods; no phases; ≤ 4 SPEC rules; ASSUMPTIONS ≤ 4 bullets; DISCUSS ≤ 2 bullets or omitted; one perf check |
+| medium      | ≤ 50 lines         | 45–60 min | unphased, or 2 phases |
+| medium-hard | ≤ 90 lines         | 60–90 min | phases; the last phase is a stretch goal |
+
+Calibration anchors: p5 LRU cache = warm-up, 25 · p1 rate limiter = 35 ·
+p2 KV store = 45 · p3 dedup = 45 · p4 meeting scheduler = medium, 60.
+
+- The timebox is what a competent but rusty engineer needs to get the
+  grader green INCLUDING one debugging round — not the time to type the
+  reference. Write "(hard stop)" after it; the README tells Daniel to
+  stop there and reveal the reference.
+- A warm-up's most natural first implementation must ALSO be the one the
+  perf section accepts. If the obvious approach would fail a perf check,
+  it is not a warm-up — it is two problems (write it, then rewrite it).
+- Any tier: when the perf section outlaws the natural first approach,
+  TARGET COMPLEXITY must say so in plain words ("the cost must not depend
+  on the window's length in minutes") so the constraint shapes the first
+  attempt instead of forcing a second one. State the bar, never the
+  technique (see the naming rule above).
+- Phased problems: the header says where the timebox lands ("phases 1–2
+  by minute 25; phase 3 is the stretch"), so running out of time in the
+  last phase is the plan, not a failure.
+- Scope creep is the enemy of the timebox: extra operations nobody asked
+  for, extra rules (falsy values, case sensitivity) and five-bullet
+  DISCUSS sections each add minutes. A warm-up gets none of them.
+
 A problem file contains NOTHING beyond the docstring and the
 `raise NotImplementedError` stubs (plus any exception classes the spec
 names). Never add an `if __name__ == "__main__":` block, self-checks, or
@@ -160,11 +212,22 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
      message name the naive implementation being caught and the target
      complexity. Finish with one `PerfConcern` (`⚠`) case rehearsing the
      DISCUSS AFTERWARDS items / memory story.
+     **Timing floor**: every timed measurement must cover at least ~10 ms
+     of work — repeat the workload inside the timed callable until it does.
+     Sub-millisecond timings turn scheduler noise into a false `✗` that
+     Daniel then debugs as if it were his bug. Independence checks
+     (`ratio < 3`) must be measured against two different correct
+     implementations before the threshold is trusted, and their timed
+     loop must pair each op on the scaled structure with a fixed-cost op
+     (cache misses alone inflate a correct O(1) op 1.5–2.5x).
 4. **Verification bar (do not skip)**: before committing a new suite,
    write BOTH a reference solution and the naive-trap solution in the
    scratchpad, overlay them onto the problem file, and confirm: reference
    → all `✓`; naive → correctness `✓` but the targeted perf check `✗`;
    pristine stubs → everything `-` skipped. Restore the scaffold afterwards.
+   Also overlay a SUBTLY wrong solution that only the randomized case
+   catches and read its failure text cold: it must be a complete, minimal
+   repro (see 6). If you can't name the bug from the text, fix the suite.
 5. **Determinism**: no wall-clock, no unseeded randomness, no
    order-dependent expectations unless the spec pins the order (give
    randomized records unique tie-break fields so oracle output is unique).
@@ -182,6 +245,19 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
    of a randomized case). Litmus test: could Daniel fix the bug from the
    failure text alone? If not, the suite — or the grader's replay — is
    what's broken, not his solution-reading discipline.
+   **Minimal repros**: a randomized failure must print a COMPLETE and
+   MINIMAL reproduction. Function-shaped suites shrink the failing input
+   first (drop records/attendees/intervals, narrow ranges, while the
+   mismatch persists) and print the whole shrunk call — never a
+   truncated one. Class-shaped suites run many short seeded rounds (≤ ~70
+   calls per traced instance — the grader prints up to 80 in full — with a
+   fresh instance per round) instead of one
+   long run, so the replay prints every call; the grader replays only the
+   instance that made the failing call.
+7. **Off-ramp**: every suite defines `REFERENCE`, a string holding the
+   verified efficient solution used for the verification bar (never the
+   brute-force oracle). `uv run grade --reveal <problem>` prints it; the
+   README tells Daniel to use it the moment the timebox ends.
 
 ## Grader API (grader/__init__.py)
 

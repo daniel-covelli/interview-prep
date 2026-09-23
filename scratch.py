@@ -1,7 +1,7 @@
-my_dict = {"group1": "value1"}
+busy = [[(0, 30), (90, 120)], [(45, 60), (45, 55)]]
 
-# The auxiliary set tracking the tuple elements
-# (Built once initially or updated alongside the dictionary)
-my_dict["1"], my_dict["a"] = "asdasd", "asdasd"
 
-print(my_dict)
+all_busy_intervals = sorted([interval for user_intervals in busy for interval in user_intervals])
+
+for i in range(1, len(all_busy_intervals)):
+    print(i)

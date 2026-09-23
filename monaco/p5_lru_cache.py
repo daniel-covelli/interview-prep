@@ -1,7 +1,7 @@
 """
 PROBLEM 5 — LRU Cache
 =====================
-Difficulty: warm-up | Timebox: 20 min | Interview frequency: very high
+Difficulty: warm-up | Timebox: 25 min (hard stop) | Interview frequency: very high
 
 CONTEXT
 -------
@@ -72,18 +72,16 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
 - Values are never None (so a None return is unambiguous); falsy values
   are real values. Keys are case-sensitive strings.
 - Single process, single thread — no locking.
-- Any standard-library structure is fair game, `collections.OrderedDict`
-  included. Be ready to explain — or write, if the interviewer asks —
-  the classic dict + doubly-linked-list version; the grader accepts
-  either.
+- Standard library only. The grader checks behavior and the complexity
+  bar, not which structures you picked.
 - The vendor call itself is out of scope: the cache is a plain
   container and never fetches anything on a miss.
 
 DISCUSS AFTERWARDS
 ------------------
-- Without OrderedDict: which pair of structures gives O(1) for all three
-  operations, and why do sentinel head/tail nodes remove most of the
-  edge cases?
+- If the interviewer bans whatever standard-library shortcut you used:
+  how do you still get O(1) for all three operations from primitives,
+  and where do the edge cases hide?
 - Vendor data goes stale. How would you add a per-entry TTL without a
   background thread, and what should happen to an expired entry that is
   also the most recently used one?
@@ -98,17 +96,173 @@ TARGET COMPLEXITY
 -----------------
 O(1) per `get`, `put` and `delete`; O(capacity) memory.
 """
+from __future__ import annotations
 
+class Node:
+    def __init__(self, key: str, value: object, left: Node | None = None, right: Node | None = None):
+        self.key = key
+        self.value = value
+        self.left = left
+        self.right = right
 
 class LRUCache:
     def __init__(self, capacity: int) -> None:
-        raise NotImplementedError
-
+        self.capacity: int = capacity
+        self.index: dict[str, Node] = {}
+        self.start: Node | None = None
+        self.end: Node | None = None
+        self.count: int = 0
+    
     def get(self, key: str) -> object | None:
-        raise NotImplementedError
+        if key not in self.index: return None
+
+        if self.index[key] == self.start:
+             return self.index[key].value
+
+        left = self.index[key].left
+        left.right = self.index[key].right
+
+        if self.index[key] == self.end:
+            self.end = left
+        else: 
+            self.index[key].right.left = left
+        
+        prev_start = self.start
+        self.index[key].right = prev_start
+        self.index[key].left = None
+        self.start = self.index[key]
+
+        prev_start.left = self.index[key]
+
+        return self.index[key].value
 
     def put(self, key: str, value: object) -> None:
-        raise NotImplementedError
+        if key in self.index:
+            self.get(key)
+            self.index[key].value = value
+            return
+        
+        if self.count == self.capacity:
+          self.get(self.end.key)
+
+          prev_key = self.start.key
+          self.start.key = key
+          del self.index[prev_key]
+
+          self.start.value = value
+          self.index[key] = self.start
+          return 
+
+        node = Node(key, value)
+
+        if not self.start and not self.end:
+          self.start = node
+          self.end = node
+        else:
+          node.right = self.start
+          self.start.left = node
+          self.start = node
+            
+        self.index[key] = node
+        self.count += 1
+        
+            
+    def get_all(self):
+        results = []
+        next = self.start 
+        while next:
+            results.append((next.key, next.value))
+            next = next.right
+        return results 
 
     def delete(self, key: str) -> bool:
-        raise NotImplementedError
+        if key not in self.index: return False
+
+        dead_node = self.index[key]
+        if dead_node.left and dead_node.right:
+            dead_node.left.right = dead_node.right
+            dead_node.right.left = dead_node.left
+        if not dead_node.right and not dead_node.left:
+            self.start = None
+            self.end = None
+        elif not dead_node.right:
+            self.end = dead_node.left
+            dead_node.left.right = None
+        elif not dead_node.left:
+            self.start = dead_node.right
+            dead_node.right.left = None
+
+        self.count -= 1
+        del self.index[key]
+        return True
+
+if __name__ == "__main__":
+    from lib import run_test_cases, show
+
+    test_cases = [
+        [
+            (LRUCache, (2,)),
+            ("put", ("mbox_a", {"amount": 1.0}), None),
+            ("put", ("mbox_b", {"meep": "morp"}), None),
+            ("get_all", (), [("mbox_b", {"meep": "morp"}), ("mbox_a", {"amount": 1.0})] ),
+            ("put", ("mbox_c", {"action": "bye A"}), None),
+            ("get_all", (), [("mbox_c", {"action": "bye A"}), ("mbox_b", {"meep": "morp"})] ),
+            ("put", ("mbox_b", {"hello": "world"}), None),
+        ],
+        [
+            (LRUCache, (1,)),
+            ("put", ("mbox_a", {"amount": 1.0}), None),
+            ("put", ("mbox_b", {"meep": "morp"}), None),
+            ("get_all", (), [("mbox_b", {"meep": "morp"})] ),
+            ("get", ("mbox_a"), None)
+        ],
+        [
+            (LRUCache, (2,)),
+            ("put", ("mbox_a", {"amount": 1.0}), None),
+            ("put", ("mbox_b", {"meep": "morp"}), None),
+            ("delete", ("mbox_b"), True ),
+            ("get_all", (), [ ("mbox_a", {"amount": 1.0})] ),
+            ("put", ("mbox_b", {"meep": "morp"}), None),
+            ("delete", ("mbox_a"), True ),
+            ("get_all", (), [ ("mbox_b", {"meep": "morp"})] ),
+        ],
+        [
+            (LRUCache, (2,)),
+            ("put", ("mbox_a", {"amount": 1.0}), None),
+            ("put", ("mbox_b", {"meep": "morp"}), None),
+            ("get", ("mbox_a"), {"amount": 1.0}),
+            ("get_all", (), [("mbox_a", {"amount": 1.0}), ("mbox_b", {"meep": "morp"})] ),
+        ],
+        [
+            (LRUCache, (2,)),
+            ("put", ("a", 1), None),
+            ("put", ("b", 2), None),
+            ("get", ("a"), 1),
+            ("get_all", (), [("a", 1), ("b", 2)] ),
+            ("put", ("c", 3), None),
+            ("get_all", (), [("c", 3), ("a", 1)] ),
+        ],
+        [
+            (LRUCache, (1,)),
+            ("put", ("a", 1), None),
+            ("get", ("a"), 1),
+            ("put", ("b", 2), None)
+        ],
+        [
+            (LRUCache, (3,)),
+            ("put", ("a", 1), None),
+            ("put", ("b", 2), None),
+            ("put", ("c", 3), None),
+            ("get", ("a"), 1),
+            ("put", ("d", 4), None),
+            ("get", ("b"), None),
+            ("get", ("c"), 3)
+        ],
+        [
+            (LRUCache, (1,)),
+            ("put", ("b", 3), None),
+            ("delete", ("b"), True),
+        ],
+    ]
+
+    run_test_cases(test_cases)

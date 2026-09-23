@@ -91,8 +91,8 @@ ASSUMPTIONS DECIDED HERE (rehearse asking them)
 DISCUSS AFTERWARDS
 ------------------
 - Prefix scans: how would you support a `keys(prefix)` that respects
-  TTLs and open transactions? What's the cost, and how would a trie
-  change it?
+  TTLs and open transactions? What does it cost with your current
+  layout, and what would you change to make it cheap?
 - How do expired keys actually free memory without a background thread
   (hint: opportunistic sweep budget per call)?
 - How would you support `get` at a past timestamp ("time travel read")?

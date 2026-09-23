@@ -8,7 +8,10 @@
 #   uv run grade monaco/p1_rate_limiter.py  # one problem
 #   uv run grade monaco                     # one company's set
 #
+import copy
 import importlib
+import inspect
+import pprint
 import sys
 import textwrap
 import time
@@ -54,7 +57,7 @@ class PerfConcern(Exception):
 _UNSET = object()
 _LABEL_W = 10          # width of "Expected: ", the widest label
 _WRAP_COL = 96         # right margin for wrapped i/o lines
-_MAX_CALLS = 40        # longer call logs print head + tail with a gap marker
+_MAX_CALLS = 80        # longer call logs print head + tail with a gap marker
 _VALUE_CAP = 800       # output/expected reprs truncated past this
 
 
@@ -91,6 +94,7 @@ class Failure(AssertionError):
 
 _traces = []       # tracing() instances created during the running case
 _call_seq = 0      # global counter so the overall-last call gets the "→"
+_paused = False    # True inside bench(): timing loops are never replayed
 
 
 _PENDING = object()    # a traced call's result before/unless it returns
@@ -112,6 +116,8 @@ class _Traced:
 
         def call(*args, **kwargs):
             global _call_seq
+            if _paused:
+                return attr(*args, **kwargs)
             _call_seq += 1
             entry = [_call_seq, name, args, kwargs, _PENDING]
             self._log.append(entry)
@@ -124,6 +130,105 @@ class _Traced:
 def tracing(cls):
     """Factory for cls whose instances record their calls for Input replay."""
     return lambda *a, **kw: _Traced(cls(*a, **kw), _fmt_call(cls.__name__, a, kw))
+
+
+_SNAPSHOT_ITEMS = 2000   # args with more nested items than this are logged by reference
+
+
+def _small(obj, budget=_SNAPSHOT_ITEMS):
+    """True if obj holds at most `budget` nested items (bails out early)."""
+    stack, seen = [obj], 0
+    while stack:
+        cur = stack.pop()
+        seen += 1
+        if seen > budget:
+            return False
+        if isinstance(cur, dict):
+            stack.extend(cur.keys()); stack.extend(cur.values())
+        elif isinstance(cur, (list, tuple, set, frozenset)):
+            stack.extend(cur)
+    return True
+
+
+def _snapshot(value):
+    """Deep-copy small arguments so a solution that mutates its inputs
+    (sorts a list in place, say) still replays with what it was GIVEN."""
+    if not _small(value):
+        return value
+    try:
+        return copy.deepcopy(value)
+    except Exception:
+        return value
+
+
+class _TracedFn:
+    """Call-recording wrapper for a module-level solution function. Records
+    each call (args snapshotted, see _snapshot) so a failure prints the
+    exact call that produced the wrong output."""
+
+    def __init__(self, fn, name):
+        self._fn = fn
+        self._name = name
+        self._log = []
+        self._ctor = None
+        try:
+            self._sig = inspect.signature(fn)
+        except (TypeError, ValueError):
+            self._sig = None
+        self.__wrapped__ = fn
+        self.__name__ = name
+        self.__doc__ = getattr(fn, "__doc__", None)
+
+    def __call__(self, *args, **kwargs):
+        global _call_seq
+        if _paused:
+            return self._fn(*args, **kwargs)
+        if self not in _traces:            # first call of this case
+            self._log = []
+            _traces.append(self)
+        _call_seq += 1
+        entry = [_call_seq, self._name, tuple(_snapshot(a) for a in args),
+                 {k: _snapshot(v) for k, v in kwargs.items()}, _PENDING]
+        self._log.append(entry)
+        result = self._fn(*args, **kwargs)
+        entry[4] = result
+        return result
+
+    def __repr__(self):
+        return f"<traced {self._name}>"
+
+    def format_call(self, args, kwargs):
+        """`name(param=value, ...)` — one line if it fits, else one
+        parameter per line, values pretty-printed."""
+        params = None
+        if self._sig is not None:
+            try:
+                bound = self._sig.bind(*args, **kwargs)
+                params = list(bound.arguments.items())
+            except TypeError:
+                params = None
+        if params is None:
+            params = [(None, a) for a in args] + list(kwargs.items())
+
+        def one(k, v):
+            return f"{k}={short(v, _VALUE_CAP)}" if k else short(v, _VALUE_CAP)
+        avail = _WRAP_COL - 6 - _LABEL_W
+        flat = f"{self._name}({', '.join(one(k, v) for k, v in params)})"
+        if len(flat) <= avail:
+            return [flat]
+        lines = [f"{self._name}("]
+        for n, (k, v) in enumerate(params):
+            prefix = f"{k}=" if k else ""
+            width = avail - 4 - len(prefix)
+            if len(repr(v)) > _VALUE_CAP:
+                text = short(v, _VALUE_CAP)      # too big to pretty-print; cap it
+            else:
+                text = pprint.pformat(v, width=width, compact=True)
+            first, *rest = text.splitlines()
+            lines.append(f"    {prefix}{first}")
+            lines.extend("    " + " " * len(prefix) + ln for ln in rest)
+            lines[-1] += ")" if n == len(params) - 1 else ","
+        return lines
 
 
 def expect(output, expected, note=None):
@@ -182,9 +287,11 @@ class Suite:
         self.failed = 0
         self.warned = 0
         self.skipped = 0
+        self._section = ""
         print(f"\n{bold('== ' + title + ' ' + '=' * max(1, 66 - len(title)))}")
 
     def section(self, name):
+        self._section = name
         print(f"\n {bold(name)}")
 
     def case(self, label, fn):
@@ -248,7 +355,9 @@ class Suite:
         pad = label.ljust(_LABEL_W) if label else " " * _LABEL_W
         width = max(30, _WRAP_COL - 6 - _LABEL_W)
         lines = textwrap.wrap(str(text), width=width, break_long_words=True,
-                              break_on_hyphens=False) or [""]
+                              break_on_hyphens=False,
+                              drop_whitespace=False) or [""]
+        lines = [ln if i == 0 else ln.lstrip() or ln for i, ln in enumerate(lines)]
         head = "      " + (bold(pad) if label else pad)
         cont = "      " + " " * _LABEL_W
         print(head + (color(lines[0]) if color else lines[0]))
@@ -256,11 +365,19 @@ class Suite:
             print(cont + (color(ln) if color else ln))
 
     def _print_input(self):
-        """Replay the traced calls of the current case as the Input block."""
+        """Replay the traced calls of the current case as the Input block.
+        Skipped in PERFORMANCE sections: the input there is a synthetic
+        workload of thousands of records, and the assert message already
+        names the scaling that went wrong."""
+        if "PERF" in self._section.upper():
+            return
         traces = [t for t in _traces if t._log]
         if not traces:
             return
         last_seq = max(t._log[-1][0] for t in traces)
+        # only the instance that made the failing (last) call is replayed:
+        # instances never share state, so other objects' histories are noise
+        traces = [t for t in traces if t._log[-1][0] == last_seq]
         many = len(traces) > 1
         label = "Input:"
 
@@ -273,6 +390,17 @@ class Suite:
             return f"{call} -> {short(res, 48)}"
 
         for i, t in enumerate(traces):
+            if isinstance(t, _TracedFn):
+                # pure function: only the failing (last) call matters
+                _, _m, a, kw, _res = t._log[-1]
+                earlier = len(t._log) - 1
+                for j, line in enumerate(t.format_call(a, kw)):
+                    self._io(label if j == 0 else "", line)
+                    label = ""
+                if earlier:
+                    self._io("", f"(the case's {earlier} earlier call"
+                                 f"{'s' if earlier > 1 else ''} not shown)", color=dim)
+                continue
             entries = list(t._log)
             arrow = None
             if entries[-1][0] == last_seq:
@@ -280,8 +408,8 @@ class Suite:
                 arrow = _fmt_call(m, a, kw)
             calls = [fmt_entry(m, a, kw, res) for _, m, a, kw, res in entries]
             if len(calls) > _MAX_CALLS:
-                omitted = len(calls) - 27
-                calls = calls[:12] + [f"[… {omitted} calls omitted …]"] + calls[-15:]
+                omitted = len(calls) - 60
+                calls = calls[:25] + [f"[… {omitted} calls omitted …]"] + calls[-35:]
             name = f"{t._ctor} #{i + 1}" if many else t._ctor
             body = "; ".join(calls) if calls else "(fresh instance)"
             self._io(label, f"{name}: {body}")
@@ -323,20 +451,32 @@ def load_class(module_name, class_name):
 
 
 def load_fn(module_name, fn_name):
-    """load_class for module-level functions (p3/p4 are function-shaped)."""
+    """load_class for module-level functions (p3/p4 are function-shaped).
+    The function comes back call-traced (like tracing() for classes) so a
+    failure prints the exact call that produced the wrong output. The
+    raw function is available as `.__wrapped__` for perf timing loops."""
     fn, err = load_class(module_name, fn_name)
     if fn is None:
         err = err.replace("has no class", "has no function")
-    return fn, err
+        return fn, err
+    return _TracedFn(fn, fn_name), None
 
 
 def bench(fn, repeat=3):
-    """Best-of-N wall time for fn(). Best (not mean) suppresses OS noise."""
+    """Best-of-N wall time for fn(). Best (not mean) suppresses OS noise.
+    Call tracing is paused while fn runs: timing loops are never replayed,
+    and the recorder must not add cost to what's being measured."""
+    global _paused
     best = float("inf")
-    for _ in range(repeat):
-        t0 = time.perf_counter()
-        fn()
-        best = min(best, time.perf_counter() - t0)
+    was = _paused
+    _paused = True
+    try:
+        for _ in range(repeat):
+            t0 = time.perf_counter()
+            fn()
+            best = min(best, time.perf_counter() - t0)
+    finally:
+        _paused = was
     return best
 
 

@@ -25,6 +25,7 @@ interpreter version transparently.
 uv run grade                    # everything
 uv run grade monaco/p2_kv_store.py  # one problem (problem or test file path, .py optional)
 uv run grade monaco             # one company's set (folder name)
+uv run grade --reveal monaco/p4_meeting_scheduler  # the reference solution — only after the timebox
 uv run juicebox/video_views.py  # a problem file's own __main__ checks
 uv run scratch.py               # the snippet pad
 ```
@@ -53,7 +54,8 @@ Randomized tests use fixed seeds, so failures reproduce exactly.
 
 ## How to practice (each problem)
 
-1. Set a timer for the timebox in the problem's docstring.
+1. Set a timer for the timebox in the problem's docstring. It is a hard
+   stop, not a suggestion.
 2. Read only the CONTEXT and SPEC. Say your clarifying questions OUT LOUD,
    then check them against the "assumptions decided here" section — that
    section stands in for the interviewer's answers.
@@ -63,10 +65,17 @@ Randomized tests use fixed seeds, so failures reproduce exactly.
 5. Do extensions in order until time runs out. "Discuss only" items: talk
    through them out loud for 2–3 minutes, no code. The `⚠` concerns in the
    grader output are the same rehearsal prompts.
+6. When the timer ends, STOP — even mid-bug. Run the grader once more, then
+   `uv run grade --reveal <company>/<problem>` and spend ten minutes comparing
+   the reference with your attempt. Grinding past the timebox is not
+   practice: a 40-minute problem that takes four hours teaches the wrong
+   lesson. If a problem blows its timebox, the label was wrong — say so and
+   have it re-tiered.
 
 **Spoiler warning:** the `tests/` folders enumerate the edge cases and
 contain brute-force oracles and reference implementations. Reading them
-defeats the practice — run them instead.
+defeats the practice — run them instead, and see the reference solution only
+through `--reveal`, only after the timebox.
 
 ## Adding problems
 

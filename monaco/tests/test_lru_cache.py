@@ -12,6 +12,37 @@ from grader import (Suite, PerfConcern, load_class, bench, fmt_s, tracing,
 
 SEED = 0xCAC4E
 
+# Reference solution, printed by `uv run grade --reveal monaco/p5_lru_cache`
+# once the timebox is up. Never read it before then.
+REFERENCE = '''
+from collections import OrderedDict
+
+
+class LRUCache:
+    def __init__(self, capacity: int) -> None:
+        self.capacity = capacity
+        self.data: OrderedDict[str, object] = OrderedDict()   # oldest first
+
+    def get(self, key: str) -> object | None:
+        if key not in self.data:
+            return None
+        self.data.move_to_end(key)          # a hit is a use
+        return self.data[key]
+
+    def put(self, key: str, value: object) -> None:
+        if key in self.data:
+            self.data.move_to_end(key)      # update is a use, never evicts
+        elif len(self.data) >= self.capacity:
+            self.data.popitem(last=False)   # evict the least recently used
+        self.data[key] = value
+
+    def delete(self, key: str) -> bool:
+        if key not in self.data:
+            return False
+        del self.data[key]                  # not a use; frees a slot
+        return True
+'''
+
 
 class Oracle:
     """Brute-force truth: a dict of values plus a plain list of keys in
@@ -245,38 +276,41 @@ def main():
         expect(c2.delete("KEY"), False, note='"KEY" was never inserted')
     suite.case("falsy values are real values; keys compare exactly", values_and_keys)
 
-    def run_random(c, oracle, rng, n_ops, cap, with_delete):
-        ctx = ""
-        for op in range(n_ops):
-            key = rng.choice(KEYS)
-            roll = rng.random()
-            ctx = f"seed={SEED:#x}, cap={cap}, op={op}"
-            if roll < 0.45:
-                value = f"v{op}"
-                c.put(key, value)
-                oracle.put(key, value)
-            elif roll < 0.85 or not with_delete:
-                expect(c.get(key), oracle.get(key), note=f"{ctx}, get({key!r})")
-            else:
-                expect(c.delete(key), oracle.delete(key),
-                       note=f"{ctx}, delete({key!r})")
-        for key in KEYS:
-            expect(c.get(key), oracle.get(key),
-                   note=f"{ctx}, final sweep: get({key!r})")
+    def run_random(cap, rounds, n_ops, with_delete):
+        # many short seeded rounds instead of one long run: a failing round
+        # replays in full (every call, no "[… omitted …]" gap)
+        for rnd in range(rounds):
+            rng = random.Random(SEED + 1000 * cap + rnd)
+            c, oracle = make(cap), Oracle(cap)
+            ctx = f"seed={SEED:#x}, cap={cap}, round={rnd}"
+            for op in range(n_ops):
+                key = rng.choice(KEYS)
+                roll = rng.random()
+                if roll < 0.45:
+                    value = f"v{op}"
+                    c.put(key, value)
+                    oracle.put(key, value)
+                elif roll < 0.85 or not with_delete:
+                    expect(c.get(key), oracle.get(key),
+                           note=f"{ctx}, op={op}, get({key!r})")
+                else:
+                    expect(c.delete(key), oracle.delete(key),
+                           note=f"{ctx}, op={op}, delete({key!r})")
+            for key in KEYS:
+                expect(c.get(key), oracle.get(key),
+                       note=f"{ctx}, final sweep: get({key!r})")
 
     def randomized_get_put():
-        rng = random.Random(SEED)
         for cap in (1, 2, 4):
-            run_random(make(cap), Oracle(cap), rng, 2_000, cap, with_delete=False)
-    suite.case("randomized: 2k get/put ops over 12 keys at capacity 1, 2 and 4 "
-               "vs brute-force oracle", randomized_get_put)
+            run_random(cap, rounds=25, n_ops=40, with_delete=False)
+    suite.case("randomized: 25 rounds x 40 get/put ops over 12 keys at capacity 1, 2 "
+               "and 4 vs brute-force oracle", randomized_get_put)
 
     def randomized_with_deletes():
-        rng = random.Random(SEED)
         for cap in (3, 7):
-            run_random(make(cap), Oracle(cap), rng, 3_000, cap, with_delete=True)
-    suite.case("randomized: 3k get/put/delete ops over 12 keys at capacity 3 and 7 "
-               "vs brute-force oracle", randomized_with_deletes)
+            run_random(cap, rounds=40, n_ops=40, with_delete=True)
+    suite.case("randomized: 40 rounds x 40 get/put/delete ops over 12 keys at capacity "
+               "3 and 7 vs brute-force oracle", randomized_with_deletes)
 
     if suite.failed or not suite.passed:
         suite.section("PERFORMANCE")
@@ -297,21 +331,22 @@ def main():
         misses = keys[:capacity]
 
         def run():
-            c = cls(capacity)
-            for i, k in enumerate(keys):
-                c.put(k, i)
-            for k in hits:
-                c.get(k)
-            for k in misses:
-                c.get(k)
+            for _ in range(8):          # timing floor: >= ~10 ms per measurement
+                c = cls(capacity)
+                for i, k in enumerate(keys):
+                    c.put(k, i)
+                for k in hits:
+                    c.get(k)
+                for k in misses:
+                    c.get(k)
         return run
 
     def op_scaling():
         t_small = bench(churn(2_000), repeat=2)
         t_big = bench(churn(8_000), repeat=2)
         ratio = t_big / max(t_small, 1e-9)
-        suite.info(f"capacity 2k / 10k ops: {fmt_s(t_small)}   "
-                   f"capacity 8k / 40k ops: {fmt_s(t_big)}   "
+        suite.info(f"8 x (capacity 2k / 10k ops): {fmt_s(t_small)}   "
+                   f"8 x (capacity 8k / 40k ops): {fmt_s(t_big)}   "
                    f"ratio {ratio:.1f}x (O(1) per op ≈ 4x)")
         assert ratio < 10, \
             (f"4x the capacity and 4x the ops took {ratio:.1f}x longer — "
@@ -322,7 +357,7 @@ def main():
              f"popitem(last=False), or a dict of nodes in a doubly-linked list.")
     suite.case("get/put cost stays O(1) as the cache grows", op_scaling)
 
-    def timed_deletes(capacity, n_del=4_000, repeat=3):
+    def timed_deletes(capacity, n_del=4_000, repeat=2, passes=5):
         # best-of-N seconds for n_del (delete, re-put) pairs on keys spread
         # evenly across the recency order of a full cache. The re-put keeps
         # the cache full and adds a fixed O(1) cost per pair, so the ratio
@@ -336,9 +371,10 @@ def main():
             for i in range(capacity):
                 c.put(f"k{i}", i)
             t0 = time.perf_counter()
-            for k in targets:
-                c.delete(k)
-                c.put(k, 0)
+            for _ in range(passes):         # timing floor: >= ~10 ms per measurement
+                for k in targets:
+                    c.delete(k)
+                    c.put(k, 0)
             best = min(best, time.perf_counter() - t0)
         return best
 
@@ -346,7 +382,7 @@ def main():
         t_small = timed_deletes(20_000)
         t_big = timed_deletes(80_000)
         ratio = t_big / max(t_small, 1e-9)
-        suite.info(f"4k delete+re-put pairs in a 20k-entry cache: {fmt_s(t_small)}   "
+        suite.info(f"5 x 4k delete+re-put pairs in a 20k-entry cache: {fmt_s(t_small)}   "
                    f"in an 80k-entry cache: {fmt_s(t_big)}   ratio {ratio:.1f}x "
                    f"(O(1) ≈ 1x)")
         assert ratio < 3, \
@@ -367,7 +403,7 @@ def main():
             "each its own LRU list), why get is a WRITE in an LRU (it "
             "reorders, so one lock covers reads and writes), and whether to "
             "cache negative vendor results.")
-    suite.case("hand-rolled DLL / TTL / LFU / locking / negative-caching story",
+    suite.case("primitives-only / TTL / frequency-eviction / locking / negative-caching story",
                note_followups)
 
     return suite.summary()

@@ -7,9 +7,28 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from grader import (Suite, PerfConcern, Failure, load_fn, bench, fmt_s,
-                    expect, short)
+                    expect, desc)
 
 SEED = 0x5107
+
+# Reference solution, printed by `uv run grade --reveal monaco/p4_meeting_scheduler`
+# once the timebox is up. Never read it before then.
+REFERENCE = '''
+def find_slots(busy, duration, window):
+    lo, hi = window
+    # clip every interval to the window, drop the empty ones, sort by start
+    intervals = sorted((max(s, lo), min(e, hi)) for cal in busy for s, e in cal
+                       if max(s, lo) < min(e, hi))
+    out = []
+    cursor = lo                      # end of the busy region covered so far
+    for s, e in intervals:
+        if s - cursor >= duration:   # a big enough gap before this interval
+            out.append((cursor, s))
+        cursor = max(cursor, e)      # max, not e: a nested interval must not re-open a gap
+    if hi - cursor >= duration:
+        out.append((cursor, hi))
+    return out
+'''
 
 
 def oracle_slots(busy, duration, window):
@@ -37,14 +56,65 @@ def oracle_slots(busy, duration, window):
     return out
 
 
+def run(find_slots, busy, duration, window):
+    """Call the solution on a private copy; a crash reads as a mismatch."""
+    try:
+        return find_slots([list(cal) for cal in busy], duration, window)
+    except Exception as e:                       # noqa: BLE001 — report, don't hide
+        return desc(f"raised {type(e).__name__}: {e}")
+
+
+def shrink(find_slots, busy, duration, window):
+    """Delta-debug a failing input down to a minimal one that still
+    mismatches the oracle: drop attendees, then single intervals, then
+    the duration, then narrow the window. Every accepted step strictly
+    shrinks the input, so this terminates."""
+    def fails(b, d, w):
+        return run(find_slots, b, d, w) != oracle_slots(b, d, w)
+
+    def reductions(b, d, w):
+        if len(b) > 1:
+            for i in range(len(b)):
+                yield b[:i] + b[i + 1:], d, w
+        for i, cal in enumerate(b):
+            for j in range(len(cal)):
+                cand = [c[:] for c in b]
+                del cand[i][j]
+                yield cand, d, w
+        if d > 1:
+            yield b, 1, w
+        lo, hi = w
+        for cand in ((lo + (hi - lo) // 2, hi), (lo, hi - (hi - lo) // 2),
+                     (lo + 1, hi), (lo, hi - 1)):
+            if cand[0] < cand[1] and cand != w:
+                yield b, d, cand
+
+    busy = [list(cal) for cal in busy]
+    progress = True
+    while progress:
+        progress = False
+        for cand in reductions(busy, duration, window):
+            if fails(*cand):
+                busy, duration, window = cand
+                progress = True
+                break
+    return busy, duration, window
+
+
 def check(find_slots, busy, duration, window, note=None, ctx=None):
-    got = find_slots([list(cal) for cal in busy], duration, window)
+    got = run(find_slots, busy, duration, window)
     want = oracle_slots(busy, duration, window)
-    if got != want:
-        callrepr = f"find_slots({short(busy, 300)}, duration={duration}, window={window})"
-        raise Failure(output=got, expected=want,
-                      note=" ".join(filter(None, [note, callrepr,
-                                                  f"[{ctx}]" if ctx else None])))
+    if got == want:
+        return
+    n_att, n_int = len(busy), sum(len(cal) for cal in busy)
+    sb, sd, sw = shrink(find_slots, busy, duration, window)
+    origin = (f"shrunk from {ctx}: {n_att} attendees, {n_int} intervals, window={window}"
+              if ctx else f"shrunk from {n_att} attendees, {n_int} intervals, window={window}")
+    raise Failure(output=run(find_slots, sb, sd, sw), expected=oracle_slots(sb, sd, sw),
+                  note=" ".join(filter(None, [
+                      note,
+                      f"MINIMAL REPRO: find_slots({sb!r}, duration={sd}, window={sw})",
+                      f"[{origin}]"])))
 
 
 def main():
@@ -168,11 +238,15 @@ def main():
         return [[(s := rng.randrange(span), s + rng.randrange(5, 60))
                  for _ in range(per)] for _ in range(3)]
 
+    def timed(fn, reps, repeat=3):
+        # timing floor: repeat the call so each measurement covers >= ~10 ms
+        return bench(lambda: [fn() for _ in range(reps)], repeat=repeat)
+
     def interval_scaling():
         small = gen_busy(4_000, 300_000)
         big = gen_busy(16_000, 1_200_000)
-        t_small = bench(lambda: find_slots(small, 30, (0, 300_000)), repeat=2)
-        t_big = bench(lambda: find_slots(big, 30, (0, 1_200_000)), repeat=2)
+        t_small = timed(lambda: find_slots(small, 30, (0, 300_000)), 8)
+        t_big = timed(lambda: find_slots(big, 30, (0, 1_200_000)), 8)
         ratio = t_big / max(t_small, 1e-9)
         suite.info(f"4k intervals: {fmt_s(t_small)}   16k intervals: {fmt_s(t_big)}   "
                    f"ratio {ratio:.1f}x (m log m ≈ 4-5x)")
@@ -183,13 +257,14 @@ def main():
     suite.case("cost scales ~m log m in total busy intervals", interval_scaling)
 
     def span_independence():
-        busy = gen_busy(300, 50_000)
-        t_small = bench(lambda: find_slots(busy, 30, (0, 100_000)), repeat=3)
-        t_big = bench(lambda: find_slots(busy, 30, (0, 1_600_000)), repeat=3)
+        busy = gen_busy(2_000, 50_000)
+        t_small = timed(lambda: find_slots(busy, 30, (0, 100_000)), 20)
+        t_big = timed(lambda: find_slots(busy, 30, (0, 1_600_000)), 20)
         ratio = t_big / max(t_small, 1e-9)
-        suite.info(f"window of 100k min: {fmt_s(t_small)}   16x wider: {fmt_s(t_big)}")
+        suite.info(f"window of 100k min: {fmt_s(t_small)}   16x wider: {fmt_s(t_big)}   "
+                   f"ratio {ratio:.1f}x (independent ≈ 1x)")
         assert ratio < 3, \
-            (f"widening the window 16x (same 300 intervals) made find_slots "
+            (f"widening the window 16x (same 2000 intervals) made find_slots "
              f"{ratio:.1f}x slower — it is scanning minute-by-minute over the "
              f"window. Work must depend on the interval COUNT, not the "
              f"window's length in minutes.")

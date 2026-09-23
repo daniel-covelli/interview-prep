@@ -4,6 +4,8 @@
 #   uv run grade                     # all problems
 #   uv run grade monaco/kv_store.py  # one problem (problem file or test file path)
 #   uv run grade monaco              # one company's set (folder name)
+#   uv run grade --reveal monaco/p4  # print the suite's REFERENCE solution
+#                                    # (the timebox off-ramp — after the timer)
 #
 # ✓ pass    ✗ bug or scaling failure    ⚠ concern worth having an answer for
 #
@@ -57,9 +59,25 @@ def run(suites, names):
     return 1 if failed else 0
 
 
+def reveal(suites, names):
+    """Print each suite's REFERENCE solution: the off-ramp once the timebox
+    is up. Suites that predate the convention say so instead."""
+    for n in names:
+        ref = getattr(suites[n], "REFERENCE", None)
+        print(f"\n== reference solution: {n} " + "=" * max(1, 42 - len(n)))
+        print(ref.strip("\n") if ref else "  (no reference recorded for this suite yet)")
+    print()
+    return 0
+
+
 def main(argv=None):
     suites, folders, aliases = discover()
     args = sys.argv[1:] if argv is None else argv
+    revealing = "--reveal" in args
+    args = [a for a in args if a != "--reveal"]
+    if revealing and not args:
+        print("usage: grade --reveal <problem path>   (prints that suite's reference solution)")
+        sys.exit(2)
     if not args:
         names = list(suites)
     else:
@@ -72,7 +90,7 @@ def main(argv=None):
                 print(f"unknown problem {a!r} — use one of: {options}")
                 sys.exit(2)
             names.extend(n for n in matched if n not in names)
-    sys.exit(run(suites, names))
+    sys.exit(reveal(suites, names) if revealing else run(suites, names))
 
 
 if __name__ == "__main__":
