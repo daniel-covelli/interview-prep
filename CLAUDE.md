@@ -180,7 +180,11 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
    - Load via `load_class("company.module", "ClassName")` /
      `load_fn(...)`; on `None`, `suite.skip_all(err)` and return.
    - Wrap classes with `tracing(cls)` so failures replay the exact call
-     sequence LeetCode-style.
+     sequence LeetCode-style. `load_fn` already returns a call-traced
+     function: a failing case prints `Input: fn(param=value, …)` for the
+     call that produced the wrong output (small args are snapshotted at
+     call time, so in-place mutation by the solution can't hide the
+     original input). Never re-wrap it or bypass it in correctness cases.
    - **CORRECTNESS section(s)**: first case is always the docstring's own
      example, labeled "spec example from the file header". Then boundary
      semantics (every half-open interval, tie-break, and "exactly at the
@@ -210,8 +214,14 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
      scale the irrelevant one, and assert `ratio < 3` for independence
      claims. `suite.info(...)` the measured timings; make the assert
      message name the naive implementation being caught and the target
-     complexity. Finish with one `PerfConcern` (`⚠`) case rehearsing the
-     DISCUSS AFTERWARDS items / memory story.
+     complexity — that message is ALL Daniel sees: the grader prints no
+     Input block for cases in a section whose name contains PERFORMANCE
+     (the workload is thousands of synthetic records), and `bench()`
+     pauses call tracing while it times, so timing loops cost nothing
+     extra and are never replayed. Time workloads through `bench` (or a
+     helper built on it), never with raw `perf_counter` loops. Finish
+     with one `PerfConcern` (`⚠`) case rehearsing the DISCUSS AFTERWARDS
+     items / memory story.
      **Timing floor**: every timed measurement must cover at least ~10 ms
      of work — repeat the workload inside the timed callable until it does.
      Sub-millisecond timings turn scheduler noise into a false `✗` that
@@ -270,8 +280,10 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
 - `tracing(cls)` — call-recording factory for Input replay: captures the
   constructor args and every method call *and its return value*, so a
   failure replays as `Cls(args): call(...) -> result; … → failing_call`
-- `load_class(dotted_module, name)` / `load_fn(...)` → `(obj, None)` or `(None, reason)`
-- `bench(fn, repeat=3)` best-of-N seconds; `fmt_s(seconds)`; `short(obj, limit)`
+- `load_class(dotted_module, name)` / `load_fn(...)` → `(obj, None)` or `(None, reason)`;
+  `load_fn` returns a traced wrapper (raw function at `.__wrapped__`)
+- `bench(fn, repeat=3, budget=10.0)` best-of-N seconds with tracing paused; a
+  single call past `budget` seconds aborts the case as a TLE; `fmt_s(seconds)`; `short(obj, limit)`
 - `raise PerfConcern("…")` inside a case → `⚠` instead of `✗`
 
 Inside a case: raising `NotImplementedError` → skip; `Failure`/`AssertionError`

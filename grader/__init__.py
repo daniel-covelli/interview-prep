@@ -12,6 +12,7 @@ import copy
 import importlib
 import inspect
 import pprint
+import signal
 import sys
 import textwrap
 import time
@@ -462,20 +463,48 @@ def load_fn(module_name, fn_name):
     return _TracedFn(fn, fn_name), None
 
 
-def bench(fn, repeat=3):
+_BUDGET_S = 10.0     # a single timed fn() call longer than this is a TLE
+
+
+class _TimeUp(BaseException):
+    """Raised inside fn() by the alarm; BaseException so a solution's
+    `except Exception` can't swallow it."""
+
+
+def bench(fn, repeat=3, budget=_BUDGET_S):
     """Best-of-N wall time for fn(). Best (not mean) suppresses OS noise.
     Call tracing is paused while fn runs: timing loops are never replayed,
-    and the recorder must not add cost to what's being measured."""
+    and the recorder must not add cost to what's being measured.
+
+    A single fn() call that runs past `budget` seconds is abandoned and
+    the case fails as a TLE: a correct-complexity solution finishes every
+    perf workload in well under a second, so waiting minutes for a
+    quadratic one to complete only delays the same verdict."""
     global _paused
     best = float("inf")
     was = _paused
     _paused = True
+
+    def alarm(signum, frame):
+        raise _TimeUp()
+    old = signal.signal(signal.SIGALRM, alarm)
     try:
         for _ in range(repeat):
+            signal.setitimer(signal.ITIMER_REAL, budget)
             t0 = time.perf_counter()
-            fn()
+            try:
+                fn()
+            except _TimeUp:
+                raise AssertionError(
+                    f"TLE: one timed run exceeded the {budget:.0f}s budget and was "
+                    f"abandoned. Workloads this size finish in well under a second at "
+                    f"the target complexity — the solution is doing super-linear work "
+                    f"(see this case's name for what is being scaled).") from None
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
             best = min(best, time.perf_counter() - t0)
     finally:
+        signal.signal(signal.SIGALRM, old)
         _paused = was
     return best
 

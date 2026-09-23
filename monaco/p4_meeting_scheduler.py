@@ -80,11 +80,8 @@ def find_slots(
     window: tuple[int, int],
 ) -> list[tuple[int, int]]:
 
-    availability = []
     if window[1] - window[0] < duration:
-        return availability
-    
-    availability.append(window)
+        return []
 
     flattened_busy = sorted([interval for user_intervals in busy for interval in user_intervals])
 
@@ -107,25 +104,22 @@ def find_slots(
       c_s, c_e = candidate
       busy_intervals.append((window[0] if c_s <= window[0] else c_s, window[1] if c_e >= window[1] else c_e))
 
-    for busy_s, busy_e in busy_intervals:
-        new_results = []
-        for avail_s, avail_e in availability:
-            if avail_s > busy_s and avail_e < busy_e: continue
-            if avail_s > busy_s or avail_e < busy_e:
-                if avail_e - avail_s >= duration: 
-                    new_results.append((avail_s, avail_e))
-                continue
+    results = []
+    left_pointer, right_pointer = window
+    for i in range(len(busy_intervals) + 1):
+        if i == len(busy_intervals):
+            if right_pointer - left_pointer >= duration:
+                results.append((left_pointer, right_pointer))
+            continue
 
-            if busy_s - avail_s >= duration:
-                new_results.append((avail_s, busy_s))
-            if avail_e - busy_e >= duration:
-                new_results.append((busy_e, avail_e))
+        inter_s, inter_e = busy_intervals[i]
 
-              
-        availability = new_results
-            
+        if inter_s - left_pointer >= duration: 
+            results.append((left_pointer, inter_s))
 
-    return availability
+        left_pointer = inter_e
+
+    return results
     
 
 
