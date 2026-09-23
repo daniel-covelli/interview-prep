@@ -79,45 +79,53 @@ def find_slots(
     duration: int,
     window: tuple[int, int],
 ) -> list[tuple[int, int]]:
-
-    if window[1] - window[0] < duration:
+    w_s, w_e = window
+    if w_e - w_s < duration:
         return []
 
     flattened_busy = sorted([interval for user_intervals in busy for interval in user_intervals])
 
     busy_intervals = []
 
-    candidate = None
+    curr_interval = None
     for i in range(len(flattened_busy)):
         s, e = flattened_busy[i]
-        if s > window[1] or e < window[0]: continue
-        if not candidate:
-            candidate = ((window[0] if s <= window[0] else s, window[1] if e >= window[1] else e))
+      
+        s = w_s if s < w_s else w_e if s > w_e else s
+        e = w_e if e > w_e else w_s if e < w_s else e
+
+        if (s, e) == (w_s, w_s) or (s, e) == (w_e, w_e):
             continue
-        c_s, c_e = candidate
-        if s <= candidate[1]:
-            candidate = (c_s, max(c_e, e))
-        else: 
-            busy_intervals.append((window[0] if c_s <= window[0] else c_s, window[1] if c_e >= window[1] else c_e))
-            candidate = (s, e)
-    if candidate:
-      c_s, c_e = candidate
-      busy_intervals.append((window[0] if c_s <= window[0] else c_s, window[1] if c_e >= window[1] else c_e))
+       
+        if not curr_interval:
+            curr_interval = (s, e)
+            continue
+
+        c_s, c_e = curr_interval
+        if s <= c_e:
+            curr_interval = (c_s, max(c_e, e))
+            continue
+
+        busy_intervals.append((c_s, c_e))
+        curr_interval = (s, e)
+
+    if curr_interval: 
+        c_s, c_e = curr_interval
+        if (c_s, c_e) != (w_s, w_s) and (c_s, c_e) != (w_e, w_e):
+            busy_intervals.append((c_s, c_e))
 
     results = []
     left_pointer, right_pointer = window
-    for i in range(len(busy_intervals) + 1):
-        if i == len(busy_intervals):
-            if right_pointer - left_pointer >= duration:
-                results.append((left_pointer, right_pointer))
-            continue
-
+    for i in range(len(busy_intervals)):
         inter_s, inter_e = busy_intervals[i]
 
         if inter_s - left_pointer >= duration: 
             results.append((left_pointer, inter_s))
 
         left_pointer = inter_e
+
+    if right_pointer - left_pointer >= duration:
+        results.append((left_pointer, right_pointer))
 
     return results
     
