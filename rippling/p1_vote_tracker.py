@@ -99,7 +99,7 @@ class VoteTracker:
         self.flips: dict[str, OrderedDict] = {}
 
     def _get_vote_key(self, user_id: str, article_id: str):
-        return f"{user_id}:{article_id}"
+        return (user_id, article_id)
 
     def vote(self, user_id: str, article_id: str, direction: str) -> None:
         if article_id not in self.scores:
