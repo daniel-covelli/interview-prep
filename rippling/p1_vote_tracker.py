@@ -90,17 +90,85 @@ TARGET COMPLEXITY
 O(1) per `vote` and per `score`; `recent_flips` in O(1) — its cost must
 not depend on how many votes or flips the user has made in total.
 """
-
+from collections import OrderedDict
 
 class VoteTracker:
     def __init__(self) -> None:
-        raise NotImplementedError
+        self.votes: dict[str, str] = {}
+        self.scores: dict[str, int] = {}
+        self.flips: dict[str, OrderedDict] = {}
+
+    def _get_vote_key(self, user_id: str, article_id: str):
+        return f"{user_id}:{article_id}"
 
     def vote(self, user_id: str, article_id: str, direction: str) -> None:
-        raise NotImplementedError
+        if article_id not in self.scores:
+            self.scores[article_id] = 0
+
+        
+
+        vote_key = self._get_vote_key(user_id, article_id)
+
+        if vote_key not in self.votes:
+            if user_id not in self.flips:
+                self.flips[user_id] = OrderedDict()
+            self.scores[article_id] += -1 if direction == "down" else 1
+        elif vote_key in self.votes and self.votes[vote_key] != direction:
+            self.scores[article_id] += -2 if direction == "down" else 2
+
+            if len(self.flips[user_id]) == 3 and article_id not in self.flips[user_id]:
+                least_recent_key = next(iter(self.flips[user_id]))
+                del self.flips[user_id][least_recent_key]
+
+            if article_id in self.flips[user_id]:
+                self.flips[user_id].move_to_end(article_id)
+            else:
+                self.flips[user_id][article_id] = None 
+
+        self.votes[vote_key] = direction
+            
 
     def score(self, article_id: str) -> int:
-        raise NotImplementedError
+        if article_id not in self.scores: return 0
+
+        return self.scores[article_id]
 
     def recent_flips(self, user_id: str) -> list[str]:
-        raise NotImplementedError
+        if user_id not in self.flips:
+            return []
+        
+        return list(reversed(self.flips[user_id]))
+       
+
+
+if __name__ == "__main__":
+    from lib import run_test_cases, show
+
+    test_cases = [
+        [
+            (VoteTracker),
+            ("vote", ("dan", "a1", "up"), None),
+            ("score", ("a1"), 1),
+            ("vote", ("dan", "a1", "up"), None),
+            ("score", ("a1"), 1),
+            ("vote", ("eve", "a1", "down"), None),
+            ("score", ("a1"), 0),
+            ("vote", ("dan", "a1", "down"), None),
+            ("score", ("a1"), -2),
+            ("score", ("no votes"), 0),
+        ],
+        [
+            (VoteTracker),
+            ("vote", ("dan", "a1", "up"), None),
+            ("vote", ("dan", "a2", "up"), None),
+            ("vote", ("dan", "a3", "up"), None),
+            ("recent_flips", ("dan"), []),
+            ("vote", ("dan", "a1", "down"), None),
+            ("vote", ("dan", "a2", "down"), None),
+            ("vote", ("dan", "a2", "down"), None),
+            ("recent_flips", ("dan"), ["a2", "a1"]),
+        ]
+        
+    ]
+
+    run_test_cases(test_cases)

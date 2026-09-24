@@ -1,7 +1,8 @@
-busy = [[(0, 30), (90, 120)], [(45, 60), (45, 55)]]
+from collections import OrderedDict
 
+od = OrderedDict([("a", None), ("b", None)])
 
-all_busy_intervals = sorted([interval for user_intervals in busy for interval in user_intervals])
+od["c"] = None
 
-for i in range(1, len(all_busy_intervals)):
-    print(i)
+od["a"] = None
+print(list(od))
