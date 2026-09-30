@@ -179,29 +179,99 @@ must not step through the window second by second. Phase 4: finding the
 rate in force at a delivery's start must not scan the driver's whole
 rate history (O(log versions) per delivery).
 """
-
+import math
+import bisect
 
 class DeliveryTracker:
     def __init__(self) -> None:
-        raise NotImplementedError
+        self.rates: dict[str, int] = {}
+        self.unpaid: float = 0
+        self.payed: float = 0
+        self.unpaid_log: list[(int, float)] = []
 
     def add_driver(self, driver_id: str, rate_cents_per_hour: int) -> None:
-        raise NotImplementedError
+        self.rates[driver_id] = rate_cents_per_hour
 
     def record_delivery(self, driver_id: str, start: int, end: int) -> None:
-        raise NotImplementedError
+        if driver_id not in self.rates:
+            raise KeyError("Driver has not been added yet")
+
+        rate = self.rates[driver_id]
+        unpaid = rate * (end - start) / 3600
+        self.unpaid += unpaid
+
+        bisect.insort(self.unpaid_log, (-end, unpaid))
 
     def total_cost(self) -> int:
-        raise NotImplementedError
+        return math.ceil(self.unpaid + self.payed)
 
     def pay_up_to(self, pay_time: int) -> None:
-        raise NotImplementedError
+        if not len(self.unpaid_log): return
+        i = len(self.unpaid_log) - 1
+        while i >= 0 and pay_time >= self.unpaid_log[i][0] * -1:
+            _, unpaid_amount = self.unpaid_log[i]
+            self.unpaid -= unpaid_amount
+            self.payed += unpaid_amount
+            self.unpaid_log.pop()
+            i -= 1
 
     def unpaid_cost(self) -> int:
-        raise NotImplementedError
+        return math.ceil(self.unpaid)
 
     def peak_active_drivers(self, now: int) -> int:
         raise NotImplementedError
 
     def update_rate(self, driver_id: str, rate_cents_per_hour: int, effective_from: int) -> None:
         raise NotImplementedError
+
+
+if __name__ == "__main__":
+    from lib import run_test_cases, show
+
+    test_cases = [
+        [
+            (DeliveryTracker),
+            ("add_driver", ("alice", 1000), None),
+            ("record_delivery", ("alice", 0, 5400), None),
+            ("total_cost", (), 1500),
+            ("add_driver", ("bob", 1200), None),
+            ("record_delivery", ("bob", 1000, 2800), None),
+            ("record_delivery", ("bob", 2000, 5600), None),
+            ("total_cost", (), 3300),
+        ],
+        [
+            (DeliveryTracker),
+            ("add_driver", ("carol", 1), None),
+            ("record_delivery", ("carol", 0, 1800), None),
+            ("total_cost", (), 1),
+            ("record_delivery", ("carol", 0, 1800), None),
+            ("total_cost", (), 1),
+        ],
+        [
+            (DeliveryTracker),
+            ("add_driver", ("alice", 1000), None),
+            ("record_delivery", ("alice", 0, 3600), None),
+            ("record_delivery", ("alice", 3000, 6600), None),
+            ("unpaid_cost", (), 2000),
+            ("pay_up_to", (3600), None),
+            ("unpaid_cost", (), 1000),
+            ("total_cost", (), 2000),
+            ("pay_up_to", (3600), None),
+            ("unpaid_cost", (), 1000),
+            ("record_delivery", ("alice", 0, 1800), None),
+            ("unpaid_cost", (), 1500),
+            ("pay_up_to", (2000), None),
+            ("unpaid_cost", (), 1000),
+        ],
+        [
+            (DeliveryTracker),
+            ("add_driver", ("carol", 1), None),
+            ("record_delivery", ("carol", 0, 1800), None),   
+            ("record_delivery", ("carol", 0, 5400), None),  
+            ("total_cost", (), 2),                          
+            ("pay_up_to", (1800), None),
+            ("unpaid_cost", (), 2),                         
+        ],
+    ]
+
+    run_test_cases(test_cases)

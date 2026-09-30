@@ -105,8 +105,6 @@ class VoteTracker:
         if article_id not in self.scores:
             self.scores[article_id] = 0
 
-        
-
         vote_key = self._get_vote_key(user_id, article_id)
 
         if vote_key not in self.votes:
