@@ -188,9 +188,12 @@ class DeliveryTracker:
         self.unpaid: float = 0
         self.payed: float = 0
         self.unpaid_log: list[(int, float)] = []
+        self.deliveries: dict[str, list[(int, int)]] = {}
+        self.ad_intervals: dict[tuple[int, int], int] = {}
 
     def add_driver(self, driver_id: str, rate_cents_per_hour: int) -> None:
         self.rates[driver_id] = rate_cents_per_hour
+        self.deliveries[driver_id] = []
 
     def record_delivery(self, driver_id: str, start: int, end: int) -> None:
         if driver_id not in self.rates:
@@ -199,6 +202,44 @@ class DeliveryTracker:
         rate = self.rates[driver_id]
         unpaid = rate * (end - start) / 3600
         self.unpaid += unpaid
+
+        driver_deliveries = self.deliveries[driver_id]
+        nw_s, nw_e = None, None
+        for i in range(len(driver_deliveries)):
+            d_s, d_e = driver_deliveries[i]
+            if (d_s >= start and d_s <= end) or (d_e >= start and d_e <= end):
+                nw_s, nw_e = min(d_s, start), max(d_e, end)
+                driver_deliveries[i] = (nw_s, nw_e)
+                break
+        if not nw_s:
+            nw_s, nw_e = start, end
+            driver_deliveries.append((nw_s, nw_e))
+
+        to_delete = set()
+        window_vals = set()
+        for ad_s, ad_e in self.ad_intervals.keys():
+            if (ad_s >= nw_s and ad_s <= nw_e) or (ad_e >= nw_s and ad_e <= nw_e):
+                to_delete.add((ad_s, ad_e))
+                window_vals.add(ad_s)
+                window_vals.add(ad_e)
+
+        max_count = 0
+        for d_s, d_e in to_delete:
+            max_count = max(max_count, self.ad_intervals[(d_s, d_e)])
+            del self.ad_intervals[(d_s, d_e)]
+
+        window_vals = list(window_vals).sort()
+
+        for v in window_vals:
+            if nw_s <= v <= nw_e:
+                continue
+            if nw_s > v:
+                self.ad_intervals[(v, nw_s)] = 1
+            if v > nw_e:
+                self.ad_intervals[(nw_e, v)] = 1 
+
+        if not merged: 
+            self.ad_intervals[(nw_s, nw_e)] = 1
 
         bisect.insort(self.unpaid_log, (-end, unpaid))
 
@@ -219,7 +260,16 @@ class DeliveryTracker:
         return math.ceil(self.unpaid)
 
     def peak_active_drivers(self, now: int) -> int:
-        raise NotImplementedError
+        start = now - (24 * 3600)
+        end = now
+        max_concurrent = 0
+        for ad_s, ad_e in self.ad_intervals.keys():
+            if start <= ad_s <= end or start <= ad_e <= end:
+                max_concurrent = max(max_concurrent, self.ad_intervals[(ad_s, ad_e)])
+
+        return max_concurrent 
+
+
 
     def update_rate(self, driver_id: str, rate_cents_per_hour: int, effective_from: int) -> None:
         raise NotImplementedError
@@ -229,49 +279,63 @@ if __name__ == "__main__":
     from lib import run_test_cases, show
 
     test_cases = [
+        # [
+        #     (DeliveryTracker),
+        #     ("add_driver", ("alice", 1000), None),
+        #     ("record_delivery", ("alice", 0, 5400), None),
+        #     ("total_cost", (), 1500),
+        #     ("add_driver", ("bob", 1200), None),
+        #     ("record_delivery", ("bob", 1000, 2800), None),
+        #     ("record_delivery", ("bob", 2000, 5600), None),
+        #     ("total_cost", (), 3300),
+        # ],
+        # [
+        #     (DeliveryTracker),
+        #     ("add_driver", ("carol", 1), None),
+        #     ("record_delivery", ("carol", 0, 1800), None),
+        #     ("total_cost", (), 1),
+        #     ("record_delivery", ("carol", 0, 1800), None),
+        #     ("total_cost", (), 1),
+        # ],
+        # [
+        #     (DeliveryTracker),
+        #     ("add_driver", ("alice", 1000), None),
+        #     ("record_delivery", ("alice", 0, 3600), None),
+        #     ("record_delivery", ("alice", 3000, 6600), None),
+        #     ("unpaid_cost", (), 2000),
+        #     ("pay_up_to", (3600), None),
+        #     ("unpaid_cost", (), 1000),
+        #     ("total_cost", (), 2000),
+        #     ("pay_up_to", (3600), None),
+        #     ("unpaid_cost", (), 1000),
+        #     ("record_delivery", ("alice", 0, 1800), None),
+        #     ("unpaid_cost", (), 1500),
+        #     ("pay_up_to", (2000), None),
+        #     ("unpaid_cost", (), 1000),
+        # ],
+        # [
+        #     (DeliveryTracker),
+        #     ("add_driver", ("carol", 1), None),
+        #     ("record_delivery", ("carol", 0, 1800), None),   
+        #     ("record_delivery", ("carol", 0, 5400), None),  
+        #     ("total_cost", (), 2),                          
+        #     ("pay_up_to", (1800), None),
+        #     ("unpaid_cost", (), 2),                         
+        # ],
         [
             (DeliveryTracker),
             ("add_driver", ("alice", 1000), None),
-            ("record_delivery", ("alice", 0, 5400), None),
-            ("total_cost", (), 1500),
-            ("add_driver", ("bob", 1200), None),
-            ("record_delivery", ("bob", 1000, 2800), None),
-            ("record_delivery", ("bob", 2000, 5600), None),
-            ("total_cost", (), 3300),
-        ],
-        [
-            (DeliveryTracker),
-            ("add_driver", ("carol", 1), None),
-            ("record_delivery", ("carol", 0, 1800), None),
-            ("total_cost", (), 1),
-            ("record_delivery", ("carol", 0, 1800), None),
-            ("total_cost", (), 1),
-        ],
-        [
-            (DeliveryTracker),
-            ("add_driver", ("alice", 1000), None),
-            ("record_delivery", ("alice", 0, 3600), None),
-            ("record_delivery", ("alice", 3000, 6600), None),
-            ("unpaid_cost", (), 2000),
-            ("pay_up_to", (3600), None),
-            ("unpaid_cost", (), 1000),
-            ("total_cost", (), 2000),
-            ("pay_up_to", (3600), None),
-            ("unpaid_cost", (), 1000),
-            ("record_delivery", ("alice", 0, 1800), None),
-            ("unpaid_cost", (), 1500),
-            ("pay_up_to", (2000), None),
-            ("unpaid_cost", (), 1000),
-        ],
-        [
-            (DeliveryTracker),
-            ("add_driver", ("carol", 1), None),
-            ("record_delivery", ("carol", 0, 1800), None),   
-            ("record_delivery", ("carol", 0, 5400), None),  
-            ("total_cost", (), 2),                          
-            ("pay_up_to", (1800), None),
-            ("unpaid_cost", (), 2),                         
-        ],
+            ("add_driver", ("bob", 1000), None),
+            ("add_driver", ("cy", 1000), None),
+            ("record_delivery", ("alice", 100, 200), None),
+            ("record_delivery", ("bob", 150, 250), None),
+            ("record_delivery", ("cy", 200, 300), None),
+            # ("peak_active_drivers", (300), 2),
+            ("record_delivery", ("alice", 120, 260), None),
+            ("peak_active_drivers", (300), 3),
+            ("peak_active_drivers", (86650), 2),
+            ("peak_active_drivers", (90000), 0),
+        ]
     ]
 
     run_test_cases(test_cases)
