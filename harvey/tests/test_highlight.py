@@ -1,4 +1,4 @@
-# Grader for Harvey Problem 2 (harvey/p2_highlight.py).
+# Grader for Harvey Problem 3 (harvey/p3_highlight.py).
 # SPOILER WARNING: this file enumerates edge cases and contains a brute-force
 # oracle and the reference solution. Run it, don't read it.
 import random
@@ -10,7 +10,7 @@ from grader import Suite, PerfConcern, Failure, load_fn, bench, fmt_s, expect
 
 SEED = 0xB01D
 
-# Reference solution, printed by `uv run grade --reveal harvey/p2_highlight`
+# Reference solution, printed by `uv run grade --reveal harvey/p3_highlight`
 # once the timebox is up. Never read it before then.
 REFERENCE = '''
 def _regions(text, phrases):
@@ -144,9 +144,9 @@ def random_input(rng):
 
 
 def main():
-    suite = Suite("Harvey 2: highlight")
-    highlight, err = load_fn("harvey.p2_highlight", "highlight")
-    cited, err2 = load_fn("harvey.p2_highlight", "highlight_cited")
+    suite = Suite("Harvey 3: highlight")
+    highlight, err = load_fn("harvey.p3_highlight", "highlight")
+    cited, err2 = load_fn("harvey.p3_highlight", "highlight_cited")
     if highlight is None or cited is None:
         suite.skip_all(err or err2)
         return suite.summary()

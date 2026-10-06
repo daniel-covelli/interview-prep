@@ -1,7 +1,7 @@
 """
-PROBLEM 3 — In-Memory File System
+PROBLEM 4 — In-Memory File System
 =================================
-Difficulty: medium | Timebox: 45 min (hard stop) — phase 1 by minute 25 |
+Difficulty: medium-hard | Timebox: 70 min (hard stop) — phase 1 by minute 45; phase 2 is the stretch |
 Interview frequency: high (Harvey phone screens and onsites, 2025–2026)
 
 CONTEXT

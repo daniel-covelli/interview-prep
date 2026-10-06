@@ -1,7 +1,7 @@
 """
-PROBLEM 2 — Highlight Source Matches
+PROBLEM 3 — Highlight Source Matches
 ====================================
-Difficulty: medium | Timebox: 45 min (hard stop) — phase 1 by minute 25 |
+Difficulty: medium | Timebox: 60 min (hard stop) — phase 1 by minute 35 |
 Interview frequency: high (Harvey phone screens and onsites, 2025–2026)
 
 CONTEXT

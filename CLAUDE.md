@@ -132,19 +132,48 @@ and rewrite any hit.
 ## Difficulty tiers and timeboxes (hard limits)
 
 The header's tier and timebox are promises. A broken one costs Daniel
-hours, not minutes (2026-09-16: p4, labeled "medium | 40 min", took four
-hours). Tiers are set by the REFERENCE SOLUTION, never by how the problem
-feels: write the reference first, then classify, and never round down —
-when in doubt, the next tier up.
+hours, not minutes (2026-09-16: monaco p4, labeled "medium | 40 min",
+took four hours; 2026-10-06: harvey p1 spreadsheet, labeled "medium |
+45 min" from its ~20-line reference, took several hours). Never write a
+timebox you haven't reasoned out. A number picked from line count, from
+"feels like a medium", or to fit the table is a broken promise.
 
-| tier        | reference solution | timebox   | shape |
-|-------------|--------------------|-----------|-------|
-| warm-up     | ≤ 20 lines         | 15–25 min | one function, or ctor + ≤ 2 methods; no phases; ≤ 4 SPEC rules; ASSUMPTIONS ≤ 4 bullets; DISCUSS ≤ 2 bullets or omitted; one perf check |
-| medium      | ≤ 50 lines         | 45–60 min | unphased, or 2 phases |
-| medium-hard | ≤ 90 lines         | 60–90 min | phases; the last phase is a stretch goal |
+**Timebox assessment (required, before the header is written).** Write
+the reference first, then think through the following privately. The
+assessment is your own reasoning: it never goes into any file (no
+docstring, no comment block, nothing in the test suite).
 
-Calibration anchors: p5 LRU cache = warm-up, 25 · p1 rate limiter = 35 ·
-p2 KV store = 45 · p3 dedup = 45 · p4 meeting scheduler = medium, 60.
+1. **Steps**: each piece Daniel must build (parse, store, query, each
+   phase), with minutes for a competent but RUSTY engineer, who isn't
+   someone who has the solution in mind.
+2. **Crux**: the conceptual step where people get stuck, and why
+   (e.g. telling "reached this cell twice by different routes" apart
+   from "came back around in a loop"). Problems whose crux is a
+   graph/recursion/invariant idea cost far more than their line count
+   suggests: budget the crux at 2–3x its typing time.
+3. **Likely wrong first attempts**: plausible bugs and natural
+   approaches the perf checks reject, plus what each costs to discover
+   and fix (a rewrite forced by a perf check after a phase is done costs
+   15–20 min, not 2).
+4. **Total**: steps + crux + one debugging round, rounded UP to 5 min.
+   That number is the timebox; the tier follows from it. Only the
+   resulting header line shows up in the problem file.
+
+| tier        | timebox (from the assessment) | shape |
+|-------------|-------------------------------|-------|
+| warm-up     | 15–25 min | one function, or ctor + ≤ 2 methods; no phases; no conceptual crux; ≤ 4 SPEC rules; ASSUMPTIONS ≤ 4 bullets; DISCUSS ≤ 2 bullets or omitted; one perf check |
+| medium      | 45–60 min | unphased, or 2 phases |
+| medium-hard | 60–90 min | phases; the last phase is a stretch goal, or the crux sits in the last phase |
+
+Reference length is a FLOOR, never the estimate: > 20 lines can't be a
+warm-up, > 50 can't be a medium, but a 20-line reference with a hard
+crux can still be medium-hard. When in doubt, the longer timebox.
+
+Calibration anchors (actual outcomes beat estimates): p5 LRU cache =
+warm-up, 25 · p1 rate limiter = 35 · p2 KV store = 45 · p3 dedup = 45 ·
+monaco p4 meeting scheduler = medium, 60 (took 4 h at a 40 label) ·
+harvey p1 spreadsheet = medium-hard, 75 (took several hours at a 45 label;
+crux: loop detection).
 
 - The timebox is what a competent but rusty engineer needs to get the
   grader green INCLUDING one debugging round — not the time to type the

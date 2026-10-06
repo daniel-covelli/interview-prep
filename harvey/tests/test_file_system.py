@@ -1,4 +1,4 @@
-# Grader for Harvey Problem 3 (harvey/p3_file_system.py).
+# Grader for Harvey Problem 4 (harvey/p4_file_system.py).
 # SPOILER WARNING: this file enumerates edge cases and contains a brute-force
 # oracle and the reference solution. Run it, don't read it.
 import random
@@ -11,7 +11,7 @@ from grader import (Suite, PerfConcern, load_class, bench, fmt_s, tracing,
 
 SEED = 0xF11E
 
-# Reference solution, printed by `uv run grade --reveal harvey/p3_file_system`
+# Reference solution, printed by `uv run grade --reveal harvey/p4_file_system`
 # once the timebox is up. Never read it before then.
 REFERENCE = '''
 class FileSystem:
@@ -98,8 +98,8 @@ NAMES = ["m", "n", "m(1)"]
 
 
 def main():
-    suite = Suite("Harvey 3: FileSystem")
-    cls, err = load_class("harvey.p3_file_system", "FileSystem")
+    suite = Suite("Harvey 4: FileSystem")
+    cls, err = load_class("harvey.p4_file_system", "FileSystem")
     if cls is None:
         suite.skip_all(err)
         return suite.summary()

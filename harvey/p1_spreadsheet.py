@@ -1,7 +1,7 @@
 """
 PROBLEM 1 — Spreadsheet Formulas
 ================================
-Difficulty: medium | Timebox: 45 min (hard stop) — phase 1 by minute 20 |
+Difficulty: medium-hard | Timebox: 75 min (hard stop) — phase 1 by minute 20; phase 2 is the hard part |
 Interview frequency: very high (Harvey's most-reported coding question, 2025–2026)
 
 CONTEXT
