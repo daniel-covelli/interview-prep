@@ -99,32 +99,37 @@ class Spreadsheet:
     def __init__(self) -> None:
         self.cell_vals = {}
 
+    def _dfs_check(self, cell: str, seen: set) -> None:
+        if cell in seen:
+            raise CycleError()
+
+        if cell not in self.cell_vals:
+            return
+
+        if is_integer(self.cell_vals[cell]):
+            return
+
+        for x in list(set(x for x in self.cell_vals[cell][1:].split("+") if not is_integer(x))):
+            self._dfs_check(x, seen | {cell})
+        
+
     def set_cell(self, cell: str, text: str) -> None:
         if text[0] != "=":
             self.cell_vals[cell] = text
             return
 
-        seen = set([cell])
-        next = list(set(x for x in text[1:].split("+") if not is_integer(x)))
-
-        while next:
-            curr = next.pop()
-
-            if curr in seen:
-                raise CycleError()
-
-            if curr not in self.cell_vals:
-                continue
-
-            if is_integer(self.cell_vals[curr]):
-                continue
-
-            next = next + list(set(x for x in self.cell_vals[curr][1:].split("+") if not is_integer(x)))
-
-            seen.add(curr)
-            
-            
+        old = None if cell not in self.cell_vals else self.cell_vals[cell]
         self.cell_vals[cell] = text
+
+        try:
+          self._dfs_check(cell, set())
+          return
+        except CycleError:
+          if old is None:
+              del self.cell_vals[cell]
+          else:
+            self.cell_vals[cell] = old
+          raise CycleError()
 
     def get_cell(self, cell: str) -> int:
         if cell not in self.cell_vals:
@@ -185,15 +190,3 @@ if __name__ == "__main__":
     ]
 
     run_test_cases(test_cases)
-
-    # sheet = Spreadsheet()
-    # sheet.set_cell("A1", "=B1+1")
-    # sheet.set_cell("B1", "=A1")       -> raises CycleError   # A1 -> B1 -> A1
-    # sheet.get_cell("B1")   -> 0       # still never set
-    # sheet.set_cell("C1", "=C1+1")     -> raises CycleError   # refers to itself
-    # sheet.set_cell("B1", "=C1+2")     # fine: C1 is unset, no loop
-    # sheet.get_cell("A1")   -> 3
-    # sheet.set_cell("C1", "=A1")       -> raises CycleError   # C1 -> A1 -> B1 -> C1
-    # sheet.set_cell("B1", "4")
-    # sheet.set_cell("C1", "=A1")       # B1 no longer reads C1: fine now
-    # sheet.get_cell("C1")   -> 5
