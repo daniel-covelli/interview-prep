@@ -1,7 +1,5 @@
 import re
 
-s = "=A1+B1+A1+2"
+arr = [0, 1, 2]
 
-
-
-print(list(set(["A1"])))
+print(",".join(map(str, arr)))

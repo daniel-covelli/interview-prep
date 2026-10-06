@@ -67,10 +67,107 @@ pass over the text — fails the check, as does (phase 2) comparing every
 bolded run against every occurrence.
 """
 
-
 def highlight(text: str, phrases: list[str]) -> str:
-    raise NotImplementedError
+    to_bold = set(phrases)
+    start = None
+    results = []
+    results_to_bold = set()
 
+    text = text + " "
+    for end in range(len(text)):
+        if start == None: 
+            start = end
+            continue
+
+        if text[end] is not " ": continue
+
+        candidate = text[start:end]
+        start = None
+
+        if candidate not in to_bold:
+            results.append(candidate)
+            continue
+
+        last = len(results) - 1
+        if last not in results_to_bold:
+            results.append(candidate)
+            results_to_bold.add(len(results) - 1)
+            continue
+            
+        results[last] = f'{results[last]} {candidate}'
+
+    return " ".join([f'<b>{results[i]}</b>' if i in results_to_bold else results[i] for i in range(len(results))])
 
 def highlight_cited(text: str, sources: list[str]) -> str:
-    raise NotImplementedError
+    citations = {sources[i]: i for i in range(len(sources))}
+    start = None
+    results = []
+    results_to_bold = {}
+
+    text = text + " "
+    for end in range(len(text)):
+        if start == None: 
+            start = end
+            continue
+
+        if text[end] is not " ": continue
+
+        candidate = text[start:end]
+        start = None
+        last = len(results) - 1
+        lookback = f'{results[last]} {candidate}' if len(results) else None
+
+        if lookback in citations:
+            results[last] = lookback
+            if last not in results_to_bold: 
+                results_to_bold[last] = [citations[lookback]]
+                continue
+
+            results_to_bold[last].append(citations[lookback])
+            continue
+
+        
+        if candidate not in citations:
+            results.append(candidate)
+            continue
+        
+        if last not in results_to_bold:
+            results.append(candidate)
+            results_to_bold[len(results) - 1] = [citations[candidate]]
+            continue
+
+        result = f'{results[last]} {candidate}'
+
+        if result in citations: results_to_bold[last].append(citations[candidate])
+
+        results[last] = result
+
+
+    result = ""
+
+    for i in range(len(results)):
+        result += " "
+        if i not in results_to_bold:
+            result += results[i]
+            continue
+        
+        group_citations = f'[{",".join(map(str, results_to_bold[i]))}]'
+        result += f'<b>{results[i]}</b>{group_citations}'
+
+    return result
+
+if __name__ == "__main__":
+    from lib import run_test_cases, show
+
+    test_cases = [
+        [
+            (highlight, ("the quick brown fox", ["quick", "fox"]), "the <b>quick</b> brown <b>fox</b>"),
+            (highlight, ("the cat and the hat", ["cat", "and"]), "the <b>cat and</b> the hat"),
+        ],
+        [
+            (highlight_cited, ("the quick brown fox", ["fox", "quick", "quick brown"]), "the <b>quick brown</b>[1,2] <b>fox</b>[0]"),
+        ]
+        
+    ]
+
+    run_test_cases(test_cases)

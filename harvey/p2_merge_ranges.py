@@ -64,10 +64,6 @@ def merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
     return results
 
-        
-        
-        
-
 if __name__ == "__main__":
     from lib import run_test_cases, show
 
