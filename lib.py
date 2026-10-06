@@ -20,6 +20,10 @@ def run_test_cases(test_cases: list[list], run_specific: int | None = None):
     or (function, args, kwargs, expected) — when the call needs keyword
     arguments (e.g. keyword-only params like now=).
 
+    An exception class as expected means the call must RAISE it (or a
+    subclass): ("set_cell", ("B1", "=A1"), CycleError). Returning
+    normally, or raising something else, fails the step.
+
     Drop a bare `show` (from lib) anywhere in the steps to print the
     instance's internal state at that point — `(show, "label")` titles
     the snapshot, and `(show, obj)` prints some other object instead
@@ -56,10 +60,24 @@ def run_test_cases(test_cases: list[list], run_specific: int | None = None):
             if not isinstance(args, tuple):
                 args = (args,)
             call = f"{label}{args}" + (f" with {kwargs}" if kwargs else "")
+            raises = isinstance(expected, type) and issubclass(expected, BaseException)
             print(f"{'Method' if is_class else 'Function'}: {label}, "
                   f"args: {args}"
                   + (f", kwargs: {kwargs}" if kwargs else "")
-                  + f", expected: {expected}")
+                  + (f", expected: raises {expected.__name__}" if raises
+                     else f", expected: {expected}"))
+            if raises:
+                try:
+                    result = fn(*args, **kwargs)
+                except expected:
+                    continue
+                except Exception as e:
+                    raise AssertionError(
+                        f"Failed: {call} raised {type(e).__name__}: {e}, "
+                        f"expected {expected.__name__}") from e
+                raise AssertionError(
+                    f"Failed: {call} returned {result!r}, "
+                    f"expected it to raise {expected.__name__}")
             result = fn(*args, **kwargs)
             assert result == expected, (
                 f"Failed: {call} returned {result!r}, expected {expected!r}"

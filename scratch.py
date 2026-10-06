@@ -1,8 +1,7 @@
-from collections import OrderedDict
+import re
 
-od = OrderedDict([("a", None), ("b", None)])
+s = "=A1+B1+A1+2"
 
-od["c"] = None
 
-od["a"] = None
-print(list(od))
+
+print(list(set(["A1"])))

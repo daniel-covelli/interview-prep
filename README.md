@@ -10,6 +10,8 @@ monaco/         5 problems — rate limiter, KV store w/ TTL+txns,
                 contact dedup, meeting scheduler, LRU cache (warm-up)
 rippling/       3 problems — article vote tracker, delivery cost tracker
                 (live total, payouts), finish time with prerequisites
+harvey/         3 problems — spreadsheet formulas (w/ loop rejection),
+                highlight source matches (w/ citations), in-memory file system
 grader/         shared test harness + the `grade` CLI (nothing interview-relevant inside)
 scratch.py      free-for-all snippet pad; nothing imports it
 lib.py          my own helpers (run_test_cases, …), importable from any
