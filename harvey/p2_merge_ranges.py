@@ -40,4 +40,44 @@ O(n log n) for n ranges.
 
 
 def merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    raise NotImplementedError
+    s_ranges = sorted(ranges)
+
+    results = []
+    current = None
+    for i in range(len(s_ranges)):
+        if current is None:
+            current = s_ranges[i]
+            continue
+
+        i_start, i_end = s_ranges[i]
+
+        if i_start <= current[1]:
+            current = (current[0], max(i_end, current[1]))
+            continue
+
+        results.append(current)
+        current = (i_start, i_end)
+        
+
+    if current is not None:
+        results.append(current)
+
+    return results
+
+        
+        
+        
+
+if __name__ == "__main__":
+    from lib import run_test_cases, show
+
+    test_cases = [
+        [
+            (merge_ranges, ([(1, 3), (2, 6), (8, 10)]), [(1, 6), (8, 10)]),
+            (merge_ranges, ([(1, 4), (4, 5)]), [(1, 5)]),
+            (merge_ranges, ([(1, 10), (2, 3)]), [(1, 10)]),
+        ],
+        
+    ]
+
+    run_test_cases(test_cases)
