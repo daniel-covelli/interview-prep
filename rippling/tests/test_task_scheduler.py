@@ -14,14 +14,13 @@ SEED = 0x7A5C
 # once the timebox is up. Never read it before then.
 REFERENCE = '''
 def finish_time(durations, prereqs):
-    n = len(durations)
-    after = [[] for _ in range(n)]           # a -> tasks that wait for a
-    waiting = [0] * n                        # unfinished prerequisites per task
+    after = {t: [] for t in durations}       # a -> tasks that wait for a
+    waiting = {t: 0 for t in durations}      # unfinished prerequisites per task
     for a, b in prereqs:
         after[a].append(b)
         waiting[b] += 1
-    start = [0] * n
-    ready = [t for t in range(n) if waiting[t] == 0]
+    start = {t: 0 for t in durations}
+    ready = [t for t in durations if waiting[t] == 0]
     done, latest = 0, 0
     while ready:                             # each task is settled exactly once
         t = ready.pop()
@@ -32,7 +31,7 @@ def finish_time(durations, prereqs):
             waiting[b] -= 1
             if waiting[b] == 0:
                 ready.append(b)
-    return latest if done == n else -1      # something never became ready: a cycle
+    return latest if done == len(durations) else -1   # never ready: a cycle
 '''
 
 
@@ -40,13 +39,12 @@ def oracle(durations, prereqs):
     """Brute-force truth: relax every task's finish time from its
     prerequisites over and over until nothing changes (an acyclic plan
     settles within n passes); still changing after n + 1 passes is a cycle."""
-    n = len(durations)
-    pre = [[a for a, b in prereqs if b == t] for t in range(n)]
-    fin = [0] * n
-    for _ in range(n + 1):
-        new = [durations[t] + max((fin[p] for p in pre[t]), default=0) for t in range(n)]
+    pre = {t: [a for a, b in prereqs if b == t] for t in durations}
+    fin = {t: 0 for t in durations}
+    for _ in range(len(durations) + 1):
+        new = {t: durations[t] + max((fin[p] for p in pre[t]), default=0) for t in durations}
         if new == fin:
-            return max(fin, default=0)
+            return max(fin.values(), default=0)
         fin = new
     return -1
 
@@ -54,32 +52,28 @@ def oracle(durations, prereqs):
 def outcome(fn, durations, prereqs):
     """Call the solution on private copies; a crash reads as an outcome."""
     try:
-        return fn(list(durations), list(prereqs))
+        return fn(dict(durations), list(prereqs))
     except NotImplementedError:
         raise                                    # a stub: the case is skipped, not failed
     except Exception as e:                       # noqa: BLE001 — report, don't hide
-        return f"raised {type(e).__name__}: {e}"
+        return f"raised {type(e).__name__}: {e!r}"
 
 
 def shrink(fn, durations, prereqs):
     """Delta-debug a failing input down to a minimal one that still
-    mismatches the oracle: drop a task (renumbering the rest), drop a
-    prerequisite pair, shrink a duration to 1."""
+    mismatches the oracle: drop a task (and its pairs), drop a prerequisite
+    pair, shrink a duration to 1."""
     def fails(d, p):
         return outcome(fn, d, p) != oracle(d, p)
 
-    def drop_task(d, p, i):
-        ren = lambda t: t - (t > i)
-        return d[:i] + d[i + 1:], [(ren(a), ren(b)) for a, b in p if i not in (a, b)]
-
     def reductions(d, p):
-        for i in range(len(d)):
-            yield drop_task(d, p, i)
+        for t in d:
+            yield {k: v for k, v in d.items() if k != t}, [x for x in p if t not in x]
         for i in range(len(p)):
             yield d, p[:i] + p[i + 1:]
-        for i, x in enumerate(d):
+        for t, x in d.items():
             if x > 1:
-                yield d[:i] + [1] + d[i + 1:], p
+                yield {**d, t: 1}, p
 
     progress = True
     while progress:
@@ -104,9 +98,10 @@ def check(fn, durations, prereqs, ctx):
 
 def random_dag(rng, n, pairs):
     """n tasks in a hidden order; pairs only point forward, so it's acyclic."""
-    order = list(range(n))
+    names = [chr(ord("a") + i) for i in range(n)]
+    order = names[:]
     rng.shuffle(order)
-    durations = [rng.randrange(1, 9) for _ in range(n)]
+    durations = {t: rng.randrange(1, 9) for t in names}
     prereqs = []
     for _ in range(pairs if n > 1 else 0):
         i, j = sorted(rng.sample(range(n), 2))
@@ -125,37 +120,45 @@ def main():
     suite.section("CORRECTNESS")
 
     def spec_example():
-        expect(finish_time([2, 1, 3, 2, 1], [(1, 3), (0, 4), (1, 4), (2, 4)]), 4,
-               note="0 runs 0-2, 1 runs 0-1, 2 runs 0-3, 3 runs 1-3, 4 runs 3-4")
-        expect(finish_time([3, 1], []), 3)
-        expect(finish_time([], []), 0)
-        expect(finish_time([1, 1, 1], [(0, 1), (1, 2)]), 3)
+        durations = {"design": 2, "setup": 1, "write": 3, "build": 2, "ship": 1}
+        prereqs = [("setup", "build"), ("design", "ship"), ("setup", "ship"), ("write", "ship")]
+        expect(finish_time(durations, prereqs), 4,
+               note="design 0-2, setup 0-1, write 0-3, build 1-3, ship 3-4")
+        expect(finish_time({"a": 3, "b": 1}, []), 3)
+        expect(finish_time({}, []), 0)
+        expect(finish_time({"a": 1, "b": 1, "c": 1}, [("a", "b"), ("b", "c")]), 3)
     suite.case("spec example from the file header", spec_example)
 
     def cycles():
-        expect(finish_time([1, 1], [(0, 1), (1, 0)]), -1, note="0 before 1 and 1 before 0")
-        expect(finish_time([1], [(0, 0)]), -1, note="a task that is its own prerequisite")
-        expect(finish_time([5, 1, 1], [(1, 2), (2, 1)]), -1,
-               note="task 0 is fine on its own, but 1 <-> 2 makes the project impossible")
-        expect(finish_time([1, 2, 3, 4], [(0, 1), (1, 2), (2, 1), (2, 3)]), -1,
-               note="cycle 1 -> 2 -> 1 with a task before it (0) and after it (3)")
+        expect(finish_time({"a": 1, "b": 1}, [("a", "b"), ("b", "a")]), -1,
+               note="a before b and b before a")
+        expect(finish_time({"a": 1}, [("a", "a")]), -1, note="a task that is its own prerequisite")
+        expect(finish_time({"a": 5, "b": 1, "c": 1}, [("b", "c"), ("c", "b")]), -1,
+               note="a is fine on its own, but b <-> c makes the project impossible")
+        expect(finish_time({"a": 1, "b": 2, "c": 3, "d": 4},
+                           [("a", "b"), ("b", "c"), ("c", "b"), ("c", "d")]), -1,
+               note="cycle b -> c -> b with a task before it (a) and after it (d)")
     suite.case("circular prerequisites return -1", cycles)
 
     def waits_for_the_slowest():
-        expect(finish_time([5, 1, 2, 1], [(1, 3), (0, 3), (2, 3)]), 6,
-               note="task 3 waits for task 0 (done at 5), its slowest prerequisite, "
+        expect(finish_time({"x": 5, "y": 1, "z": 2, "join": 1},
+                           [("y", "join"), ("x", "join"), ("z", "join")]), 6,
+               note="join waits for x (done at 5), its slowest prerequisite, "
                     "not the first one to finish")
-        expect(finish_time([1, 1, 1, 1, 1], [(0, 1), (1, 2), (2, 3), (0, 4)]), 4,
-               note="the longest chain 0-1-2-3 sets the answer, not the number of tasks")
+        expect(finish_time({"a": 1, "b": 1, "c": 1, "d": 1, "e": 1},
+                           [("a", "b"), ("b", "c"), ("c", "d"), ("a", "e")]), 4,
+               note="the longest chain a-b-c-d sets the answer, not the number of tasks")
     suite.case("a task starts when its LAST prerequisite finishes", waits_for_the_slowest)
 
     def diamond_and_fanout():
-        durations = [1, 1, 2, 3, 4, 1]           # 0 feeds 1-4, which all feed 5
-        prereqs = [(0, i) for i in range(1, 5)] + [(i, 5) for i in range(1, 5)]
+        durations = {"root": 1, "m1": 1, "m2": 2, "m3": 3, "m4": 4, "leaf": 1}
+        mids = ["m1", "m2", "m3", "m4"]
+        prereqs = [("root", m) for m in mids] + [(m, "leaf") for m in mids]
         expect(finish_time(durations, prereqs), 6,
-               note="0 runs 0-1, 1..4 run from 1 (task 4 done at 5), 5 runs 5-6")
-        expect(finish_time([2, 1, 1, 1, 1, 1], [(0, i) for i in range(1, 6)]), 3,
-               note="five tasks all start when task 0 finishes at 2")
+               note="root 0-1, m1..m4 start at 1 (m4 done at 5), leaf runs 5-6")
+        hub = {"hub": 2, **{f"s{i}": 1 for i in range(5)}}
+        expect(finish_time(hub, [("hub", f"s{i}") for i in range(5)]), 3,
+               note="five tasks all start when hub finishes at 2")
     suite.case("one task feeding many, many feeding one", diamond_and_fanout)
 
     def randomized_dags():
@@ -176,7 +179,7 @@ def main():
                 a, b = rng.choice(prereqs)
                 prereqs.append((b, a))               # close a 2-cycle
             else:
-                t = rng.randrange(n)
+                t = rng.choice(list(durations))
                 prereqs.append((t, t))               # a self-loop
             rng.shuffle(prereqs)
             check(finish_time, durations, prereqs, ctx=f"seed={SEED:#x}, cycle trial={trial}")
@@ -197,8 +200,8 @@ def main():
         # 2 prerequisites per task, chosen among earlier tasks: many paths
         # lead to each task, so recomputing finish times per path explodes
         rng = random.Random(SEED)
-        durations = [rng.randrange(1, 9) for _ in range(n)]
-        prereqs = [(rng.randrange(0, i), i) for i in range(1, n) for _ in range(2)]
+        durations = {f"t{i}": rng.randrange(1, 9) for i in range(n)}
+        prereqs = [(f"t{rng.randrange(0, i)}", f"t{i}") for i in range(1, n) for _ in range(2)]
         return durations, prereqs
 
     def scaling():
