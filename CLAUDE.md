@@ -40,6 +40,22 @@ Python 3.13+, standard library only. Nothing is registered anywhere:
 the CLI globs `*/tests/test_*.py` and addresses each suite by its path
 (a `pN_` prefix on the problem file is ignored when matching).
 
+## Practice programming, no gotchas
+
+Every problem exists to practice programming. The spec serves that: it
+asks for real code against clear behavior and nothing else. The company
+only decides what kinds of problems to drill, never what the spec looks
+like: don't model its business domain (record schemas, money/rounding
+rules, payroll or expense jargon).
+
+No gotchas. A rule that tests reading fine print instead of programming
+doesn't belong in the spec: string-order tie-breaks, float-exactness
+traps, recursion-depth traps, missing-field semantics, "each report
+rounds its own sum". If the grader needs a unique answer, prefer an
+output that is unique by construction (a value, a mapping, a validated
+property) over a tie-break rule. Plain ids (ints, short strings) over
+domain records.
+
 ## Problem files
 
 The docstring IS the complete problem statement; stubs raise
@@ -55,7 +71,8 @@ Difficulty: <warm-up|medium|medium-hard> | Timebox: <NN> min | Interview frequen
 
 CONTEXT
 -------
-2–5 lines of realistic product framing (why this system exists).
+1–2 plain lines saying what is being computed. Flavor, not spec, and
+never a business-domain model (see "Practice programming, no gotchas").
 
 SPEC
 ----
@@ -70,7 +87,8 @@ explicitly — never time.time().
 EXAMPLES
 --------
 (Unphased problems only.) Copy-pasteable calls with -> expected values,
-including one tricky case. Examples always live NEXT TO the description
+including one case that shows a real edge of the problem (a cycle,
+an empty input, a value that waits on several others), never a trap. Examples always live NEXT TO the description
 they illustrate: phase examples inside their SPEC — PHASE section,
 helper-function examples with the rules they demonstrate. Daniel writes
 his own verification from these examples alone, so every separately

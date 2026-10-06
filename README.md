@@ -8,9 +8,8 @@ performance suites against whatever is currently in the problem files.
 juicebox/       3 problems (solved) — top-k counter, video views, text search
 monaco/         5 problems — rate limiter, KV store w/ TTL+txns,
                 contact dedup, meeting scheduler, LRU cache (warm-up)
-rippling/       4 problems — article vote tracker, delivery cost tracker
-                (payouts, peak concurrency, rate history), onboarding task
-                scheduler, expense rules engine
+rippling/       3 problems — article vote tracker, delivery cost tracker
+                (live total, payouts), finish time with prerequisites
 grader/         shared test harness + the `grade` CLI (nothing interview-relevant inside)
 scratch.py      free-for-all snippet pad; nothing imports it
 lib.py          my own helpers (run_test_cases, …), importable from any

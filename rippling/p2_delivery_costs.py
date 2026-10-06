@@ -1,8 +1,7 @@
 """
 PROBLEM 2 — Delivery Cost Tracker
 =================================
-Difficulty: medium-hard | Timebox: 75 min (hard stop) — phases 1–2 by minute 30,
-phase 3 by minute 50; phase 4 is the stretch |
+Difficulty: medium | Timebox: 45 min (hard stop) — phase 1 by minute 20 |
 Interview frequency: very high (Rippling's signature phone-screen question, 2024–2026)
 
 CONTEXT
@@ -88,76 +87,20 @@ Examples:
     tracker.pay_up_to(1800)
     tracker.unpaid_cost()         -> 2             # exact 1.5 rounds up — not total 2 minus paid 1
 
-SPEC — PHASE 3 (peak concurrency)
----------------------------------
-    tracker.peak_active_drivers(now: int) -> int
-
-- The largest number of DISTINCT drivers who were delivering at the
-  same instant, over the 24 hours ending at `now` (instants t with
-  now - 86400 <= t <= now). A delivery is active on [start, end): it
-  counts at its start and no longer counts at its end, so a delivery
-  ending exactly when another starts never overlaps it.
-- A driver running two overlapping deliveries counts once. Deliveries
-  entirely outside the window are ignored; one that straddles the
-  window's edge counts for the part inside. 0 when nothing was active.
-
-Examples:
-    tracker = DeliveryTracker()
-    tracker.add_driver("alice", 1000)
-    tracker.add_driver("bob", 1000)
-    tracker.add_driver("cy", 1000)
-    tracker.record_delivery("alice", 100, 200)
-    tracker.record_delivery("bob", 150, 250)
-    tracker.record_delivery("cy", 200, 300)        # starts exactly when alice's ends
-    tracker.peak_active_drivers(300)      -> 2     # alice+bob during [150, 200); bob+cy during [200, 250)
-    tracker.record_delivery("alice", 120, 260)     # alice again, overlapping her own delivery
-    tracker.peak_active_drivers(300)      -> 3     # during [200, 250): alice, bob, cy — alice counts once
-    tracker.peak_active_drivers(86650)    -> 2     # window starts at 250: bob's delivery ended exactly then
-    tracker.peak_active_drivers(90000)    -> 0     # window [3600, 90000]: nothing active
-
-SPEC — PHASE 4 (rate changes)
------------------------------
-    tracker.update_rate(driver_id: str, rate_cents_per_hour: int, effective_from: int) -> None
-
-- A driver's rate becomes a history: `add_driver` sets the rate in
-  force from time 0, and each `update_rate` adds a rate in force from
-  `effective_from` until the next later effective time. Updates may
-  arrive in any order (a raise can be back-dated); an update whose
-  `effective_from` is already in the history replaces that entry.
-- A delivery is billed at the rate in force at its `start`, even if the
-  rate changes mid-delivery. Its cost is fixed when recorded: a later
-  or back-dated `update_rate` never re-prices it.
-
-Examples:
-    tracker = DeliveryTracker()
-    tracker.add_driver("alice", 1000)              # 1000/h from time 0
-    tracker.update_rate("alice", 2000, 7200)       # 2000/h from t = 7200
-    tracker.record_delivery("alice", 3600, 7200)   # starts before the raise: 1000
-    tracker.record_delivery("alice", 7200, 10800)  # starts exactly at the raise: 2000
-    tracker.record_delivery("alice", 5400, 9000)   # spans the raise: the rate at its START applies: 1000
-    tracker.total_cost()          -> 4000
-    tracker.update_rate("alice", 3000, 0)          # back-dated: replaces the rate in force from time 0
-    tracker.record_delivery("alice", 0, 3600)      # recorded after the update: 3000
-    tracker.total_cost()          -> 7000          # the three earlier deliveries keep their costs
-    tracker.update_rate("alice", 1500, 3600)       # in force from 3600 until the 7200 entry
-    tracker.record_delivery("alice", 5000, 5600)   # in force at 5000: the 1500/h entry -> 250
-    tracker.total_cost()          -> 7250
-
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
 - Money is integer cents in and out; rates are whole cents per hour.
   Costs may be fractional cents internally; only the two report calls
   round. Binary floating point is not exact enough for this service —
   the grader includes a total it gets wrong.
-- Every `driver_id` passed to `record_delivery`/`update_rate` was
+- Every `driver_id` passed to `record_delivery` was
   registered with `add_driver` first, and `add_driver` is called once
   per driver. Timestamps are non-negative integers.
 - Deliveries are reported after they finish but not necessarily in
   order of `end` — a late report may end earlier than one already
   recorded (the payout examples rely on this).
-- Deliveries are never edited or cancelled. `now` in phase 3 is any
-  timestamp; only what was active at instants up to `now` counts.
-  Single process, single thread.
+- Deliveries are never edited or cancelled. Single process, single
+  thread.
 
 DISCUSS AFTERWARDS
 ------------------
@@ -174,10 +117,6 @@ TARGET COMPLEXITY
 and must not walk the delivery log. `record_delivery` in O(log n) or
 better, and `pay_up_to` in O(k log n) for the k deliveries it settles:
 its cost must not depend on how many deliveries were ever recorded.
-`peak_active_drivers` in O(n log n) for the n recorded deliveries — it
-must not step through the window second by second. Phase 4: finding the
-rate in force at a delivery's start must not scan the driver's whole
-rate history (O(log versions) per delivery).
 """
 import math
 import bisect
@@ -188,12 +127,9 @@ class DeliveryTracker:
         self.unpaid: float = 0
         self.payed: float = 0
         self.unpaid_log: list[(int, float)] = []
-        self.deliveries: dict[str, list[(int, int)]] = {}
-        self.ad_intervals: dict[tuple[int, int], int] = {}
 
     def add_driver(self, driver_id: str, rate_cents_per_hour: int) -> None:
         self.rates[driver_id] = rate_cents_per_hour
-        self.deliveries[driver_id] = []
 
     def record_delivery(self, driver_id: str, start: int, end: int) -> None:
         if driver_id not in self.rates:
@@ -202,44 +138,6 @@ class DeliveryTracker:
         rate = self.rates[driver_id]
         unpaid = rate * (end - start) / 3600
         self.unpaid += unpaid
-
-        driver_deliveries = self.deliveries[driver_id]
-        nw_s, nw_e = None, None
-        for i in range(len(driver_deliveries)):
-            d_s, d_e = driver_deliveries[i]
-            if (d_s >= start and d_s <= end) or (d_e >= start and d_e <= end):
-                nw_s, nw_e = min(d_s, start), max(d_e, end)
-                driver_deliveries[i] = (nw_s, nw_e)
-                break
-        if not nw_s:
-            nw_s, nw_e = start, end
-            driver_deliveries.append((nw_s, nw_e))
-
-        to_delete = set()
-        window_vals = set()
-        for ad_s, ad_e in self.ad_intervals.keys():
-            if (ad_s >= nw_s and ad_s <= nw_e) or (ad_e >= nw_s and ad_e <= nw_e):
-                to_delete.add((ad_s, ad_e))
-                window_vals.add(ad_s)
-                window_vals.add(ad_e)
-
-        max_count = 0
-        for d_s, d_e in to_delete:
-            max_count = max(max_count, self.ad_intervals[(d_s, d_e)])
-            del self.ad_intervals[(d_s, d_e)]
-
-        window_vals = list(window_vals).sort()
-
-        for v in window_vals:
-            if nw_s <= v <= nw_e:
-                continue
-            if nw_s > v:
-                self.ad_intervals[(v, nw_s)] = 1
-            if v > nw_e:
-                self.ad_intervals[(nw_e, v)] = 1 
-
-        if not merged: 
-            self.ad_intervals[(nw_s, nw_e)] = 1
 
         bisect.insort(self.unpaid_log, (-end, unpaid))
 
@@ -259,83 +157,54 @@ class DeliveryTracker:
     def unpaid_cost(self) -> int:
         return math.ceil(self.unpaid)
 
-    def peak_active_drivers(self, now: int) -> int:
-        start = now - (24 * 3600)
-        end = now
-        max_concurrent = 0
-        for ad_s, ad_e in self.ad_intervals.keys():
-            if start <= ad_s <= end or start <= ad_e <= end:
-                max_concurrent = max(max_concurrent, self.ad_intervals[(ad_s, ad_e)])
-
-        return max_concurrent 
-
-
-
-    def update_rate(self, driver_id: str, rate_cents_per_hour: int, effective_from: int) -> None:
-        raise NotImplementedError
-
 
 if __name__ == "__main__":
     from lib import run_test_cases, show
 
     test_cases = [
-        # [
-        #     (DeliveryTracker),
-        #     ("add_driver", ("alice", 1000), None),
-        #     ("record_delivery", ("alice", 0, 5400), None),
-        #     ("total_cost", (), 1500),
-        #     ("add_driver", ("bob", 1200), None),
-        #     ("record_delivery", ("bob", 1000, 2800), None),
-        #     ("record_delivery", ("bob", 2000, 5600), None),
-        #     ("total_cost", (), 3300),
-        # ],
-        # [
-        #     (DeliveryTracker),
-        #     ("add_driver", ("carol", 1), None),
-        #     ("record_delivery", ("carol", 0, 1800), None),
-        #     ("total_cost", (), 1),
-        #     ("record_delivery", ("carol", 0, 1800), None),
-        #     ("total_cost", (), 1),
-        # ],
-        # [
-        #     (DeliveryTracker),
-        #     ("add_driver", ("alice", 1000), None),
-        #     ("record_delivery", ("alice", 0, 3600), None),
-        #     ("record_delivery", ("alice", 3000, 6600), None),
-        #     ("unpaid_cost", (), 2000),
-        #     ("pay_up_to", (3600), None),
-        #     ("unpaid_cost", (), 1000),
-        #     ("total_cost", (), 2000),
-        #     ("pay_up_to", (3600), None),
-        #     ("unpaid_cost", (), 1000),
-        #     ("record_delivery", ("alice", 0, 1800), None),
-        #     ("unpaid_cost", (), 1500),
-        #     ("pay_up_to", (2000), None),
-        #     ("unpaid_cost", (), 1000),
-        # ],
-        # [
-        #     (DeliveryTracker),
-        #     ("add_driver", ("carol", 1), None),
-        #     ("record_delivery", ("carol", 0, 1800), None),   
-        #     ("record_delivery", ("carol", 0, 5400), None),  
-        #     ("total_cost", (), 2),                          
-        #     ("pay_up_to", (1800), None),
-        #     ("unpaid_cost", (), 2),                         
-        # ],
         [
             (DeliveryTracker),
             ("add_driver", ("alice", 1000), None),
-            ("add_driver", ("bob", 1000), None),
-            ("add_driver", ("cy", 1000), None),
-            ("record_delivery", ("alice", 100, 200), None),
-            ("record_delivery", ("bob", 150, 250), None),
-            ("record_delivery", ("cy", 200, 300), None),
-            # ("peak_active_drivers", (300), 2),
-            ("record_delivery", ("alice", 120, 260), None),
-            ("peak_active_drivers", (300), 3),
-            ("peak_active_drivers", (86650), 2),
-            ("peak_active_drivers", (90000), 0),
-        ]
+            ("record_delivery", ("alice", 0, 5400), None),
+            ("total_cost", (), 1500),
+            ("add_driver", ("bob", 1200), None),
+            ("record_delivery", ("bob", 1000, 2800), None),
+            ("record_delivery", ("bob", 2000, 5600), None),
+            ("total_cost", (), 3300),
+        ],
+        [
+            (DeliveryTracker),
+            ("add_driver", ("carol", 1), None),
+            ("record_delivery", ("carol", 0, 1800), None),
+            ("total_cost", (), 1),
+            ("record_delivery", ("carol", 0, 1800), None),
+            ("total_cost", (), 1),
+        ],
+        [
+            (DeliveryTracker),
+            ("add_driver", ("alice", 1000), None),
+            ("record_delivery", ("alice", 0, 3600), None),
+            ("record_delivery", ("alice", 3000, 6600), None),
+            ("unpaid_cost", (), 2000),
+            ("pay_up_to", (3600), None),
+            ("unpaid_cost", (), 1000),
+            ("total_cost", (), 2000),
+            ("pay_up_to", (3600), None),
+            ("unpaid_cost", (), 1000),
+            ("record_delivery", ("alice", 0, 1800), None),
+            ("unpaid_cost", (), 1500),
+            ("pay_up_to", (2000), None),
+            ("unpaid_cost", (), 1000),
+        ],
+        [
+            (DeliveryTracker),
+            ("add_driver", ("carol", 1), None),
+            ("record_delivery", ("carol", 0, 1800), None),   
+            ("record_delivery", ("carol", 0, 5400), None),  
+            ("total_cost", (), 2),                          
+            ("pay_up_to", (1800), None),
+            ("unpaid_cost", (), 2),                         
+        ],
     ]
 
     run_test_cases(test_cases)
