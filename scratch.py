@@ -1,5 +1,7 @@
 import re
 
-arr = [0, 1, 2]
+arr = "/cases/acme/memo(1)"
 
-print(",".join(map(str, arr)))
+left, right = arr.split('(')
+
+print(f'L {left} R {right}')

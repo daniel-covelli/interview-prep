@@ -87,8 +87,15 @@ explicitly — never time.time().
 EXAMPLES
 --------
 (Unphased problems only.) Copy-pasteable calls with -> expected values,
-including one case that shows a real edge of the problem (a cycle,
-an empty input, a value that waits on several others), never a trap. Examples always live NEXT TO the description
+including the MAIN edges of the problem, each marked with a short `#`
+comment: the corners someone could reasonably get wrong after reading
+the SPEC (touching vs separate ranges, `/p` vs `/pq`, a loop through
+an unset cell). Keep the block compact: one example can show several
+edges, and minor edges the SPEC wording already makes obvious don't
+need their own line. The test: no edge in the suite should surprise
+Daniel. Each one is either shown here or plainly implied by the SPEC.
+Edges are never traps (see "Practice programming, no gotchas").
+Examples always live NEXT TO the description
 they illustrate: phase examples inside their SPEC — PHASE section,
 helper-function examples with the rules they demonstrate. Daniel writes
 his own verification from these examples alone, so every separately
@@ -239,6 +246,11 @@ One file per problem: `<company>/tests/test_<problem>.py`. Non-negotiables:
      (empty, k=0, whole-range), and last a **randomized cross-check
      against a brute-force oracle** defined in the test file, with the
      seed/op index in the failure note so it reproduces.
+     **No surprise edges**: before committing, check each hand-written
+     case's edge against the docstring. The main ones should be shown in
+     the examples; the rest must be plainly implied by the SPEC. An edge
+     that's neither gets an example (or a SPEC phrase), or the case is
+     dropped.
    - **Later-phase cases**: a case for a later SPEC phase must SKIP, not
      fail, until Daniel builds that phase (`if not hasattr(...): raise
      NotImplementedError`, or catch the TypeError from an unsupported

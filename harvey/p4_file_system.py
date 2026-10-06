@@ -1,7 +1,7 @@
 """
 PROBLEM 4 — In-Memory File System
 =================================
-Difficulty: medium-hard | Timebox: 70 min (hard stop) — phase 1 by minute 45; phase 2 is the stretch |
+Difficulty: medium | Timebox: 45 min (hard stop) |
 Interview frequency: high (Harvey phone screens and onsites, 2025–2026)
 
 CONTEXT
@@ -9,64 +9,50 @@ CONTEXT
 Store files by absolute path, give a duplicate the next free numbered
 name instead of overwriting, and list everything inside a folder.
 
-SPEC — PHASE 1 (add and get)
-----------------------------
+SPEC
+----
     fs = FileSystem()
     fs.add_file(path: str, content: str) -> str
     fs.get_file(path: str) -> str | None
+    fs.list_files(path: str) -> list[str]
 
 - Paths are absolute: "/" followed by names joined by "/"
-  ("/cases/acme/memo"). The last name is the file; the ones before it are
-  folders. `add_file` creates any missing folders along the way.
-- If the folder already holds something called `name`, the file is
-  stored as `name(k)` instead, for the smallest k >= 1 such that
-  `name(k)` isn't taken in that folder. `add_file` returns the path the
-  file was actually stored under.
+  ("/cases/acme/memo"). The last name is the file; the ones before it
+  are its folders, which exist as soon as a file is added inside them.
+- Adding a name that already exists in the folder never overwrites:
+  the second file called `name` there is stored as `name(1)`, the third
+  as `name(2)`, and so on. `add_file` returns the path the file was
+  actually stored under.
 - `get_file` returns the content stored at `path`, or None if there is
   no file there.
+- `list_files` returns the full path of every file inside the folder at
+  `path`, at any depth, in any order. "/" is the top-level folder; a
+  folder that doesn't exist gives [].
 
-Examples:
+EXAMPLES
+--------
     fs = FileSystem()
     fs.add_file("/cases/acme/memo", "v1")    -> "/cases/acme/memo"
     fs.add_file("/cases/acme/memo", "v2")    -> "/cases/acme/memo(1)"
     fs.add_file("/cases/acme/memo", "v3")    -> "/cases/acme/memo(2)"
     fs.add_file("/cases/beta/memo", "b1")    -> "/cases/beta/memo"    # other folder
+    fs.add_file("/notes", "n")               -> "/notes"
     fs.get_file("/cases/acme/memo(1)")       -> "v2"
     fs.get_file("/cases/acme/memo(9)")       -> None
-    fs.get_file("/nowhere/memo")             -> None
-
-    fs = FileSystem()
-    fs.add_file("/a", "x")                   -> "/a"
-    fs.add_file("/a(1)", "y")                -> "/a(1)"     # an ordinary new name
-    fs.add_file("/a", "z")                   -> "/a(2)"     # a(1) is taken
-    fs.add_file("/a(1)", "w")                -> "/a(1)(1)"
-
-SPEC — PHASE 2 (list a folder)
-------------------------------
-    fs.list_files(path: str) -> list[str]
-
-- Return the full path of every file inside the folder at `path`, at any
-  depth, in any order. "/" is the top-level folder. A folder that doesn't
-  exist returns [].
-
-Examples:
-    fs = FileSystem()
-    fs.add_file("/cases/acme/memo", "v1")
-    fs.add_file("/cases/acme/memo", "v2")
-    fs.add_file("/cases/acme/2024/brief", "b")
-    fs.add_file("/notes", "n")
     fs.list_files("/cases/acme")
-        -> ["/cases/acme/memo", "/cases/acme/memo(1)", "/cases/acme/2024/brief"]   # any order
-    fs.list_files("/")         -> all four paths, any order
+        -> ["/cases/acme/memo", "/cases/acme/memo(1)", "/cases/acme/memo(2)"]  # any order
+    fs.list_files("/cases")    -> the four files under /cases, any order
+    fs.list_files("/")         -> all five files, any order
     fs.list_files("/missing")  -> []
 
 ASSUMPTIONS DECIDED HERE (rehearse asking them)
 -----------------------------------------------
 - Paths are well-formed: no trailing "/", no empty names, no "." or
   "..". Names never contain "/".
-- A path never runs through a file as if it were a folder, and a file is
-  never added under a name that an existing folder already uses.
-  `list_files` is only given folder paths (or paths that don't exist).
+- `add_file` is only ever given a file's plain path, never a numbered
+  copy like "/cases/acme/memo(1)".
+- Folder names and file names never collide: no folder is ever called
+  `memo` or `memo(1)` where a file `memo` lives.
 - No delete or rename. Single process, single thread.
 
 DISCUSS AFTERWARDS
@@ -76,23 +62,67 @@ DISCUSS AFTERWARDS
 
 TARGET COMPLEXITY
 -----------------
-- `add_file` and `get_file`: proportional to the path's length. Adding
-  the same name n times to one folder must cost O(n) in total, so
-  finding the suffix must not re-test every number already taken.
-- `list_files`: proportional to what is inside the folder being listed,
-  never to how many files the whole system holds.
+`add_file` and `get_file` must not slow down as the total number of
+files grows. `list_files` may look at every file.
 """
-
+from typing import Union
 
 class FileSystem:
     def __init__(self) -> None:
-        raise NotImplementedError
+        self.index: dict[tuple, dict[Union[int, str], Union[str, int]]] = {} # { (cases, acme, memo) : {count: 0, 0: v1, 1: v2, ...}, ...}
 
     def add_file(self, path: str, content: str) -> str:
-        raise NotImplementedError
+        p_parts = tuple(path[1:].split("/"))
+
+        if p_parts not in self.index:
+            self.index[p_parts] = {"count": 1, 0: content}
+            return path
+
+        count = self.index[p_parts]["count"]
+        self.index[p_parts]["count"] += 1
+        self.index[p_parts][count] = content
+        
+        return f'{path}({count})'
 
     def get_file(self, path: str) -> str | None:
-        raise NotImplementedError
+        if not path.endswith(")"):
+            p_parts = tuple(path[1:].split("/"))
+            if p_parts not in self.index: return None
+            return self.index[p_parts][0]
+
+        left, right = path[1:].rsplit("(")
+
+        path_index = int(right.replace(")", "")) 
+        p_parts = tuple(left.split("/"))
+
+        if p_parts not in self.index: return None
+        if path_index not in self.index[p_parts]: return None
+        
+
+        return self.index[p_parts][path_index]
 
     def list_files(self, path: str) -> list[str]:
-        raise NotImplementedError
+        results = []
+
+        p_parts = tuple(path[1:].split("/"))
+        for key, value in self.index.items():
+            if tuple(key[:len(p_parts)]) != p_parts and path != "/": continue
+
+            key_str = "/" + "/".join(key)
+
+            results += [key_str if i == 0 else f'{key_str}({i})' for i in range(value["count"])]
+            
+        return results    
+
+
+fs = FileSystem()
+r1 =  fs.add_file("/cases/acme/memo", "v1")
+print(f'R1 {r1}')
+r2 =  fs.add_file("/cases/acme/memo", "v1")
+print(f'r2 {r2}')
+
+r3 = fs.list_files("/cases/acme")
+print(f'r3 {r3}')
+
+r4 = fs.get_file("/cases/acme/memo(1)")
+print(f'r4 {r4}')
